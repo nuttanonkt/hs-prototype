@@ -310,18 +310,31 @@ function readFilesAsBase64(fileInput) {
   }));
 }
 
+function openLightbox(src, name) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] cursor-pointer';
+  overlay.style.backdropFilter = 'blur(4px)';
+  overlay.onclick = () => overlay.remove();
+  overlay.innerHTML = `<div class="relative max-w-3xl max-h-[85vh] mx-4" onclick="event.stopPropagation()">
+    <img src="${src}" alt="${name}" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl">
+    <div class="text-white text-sm text-center mt-3">${name}</div>
+    <button onclick="this.closest('.fixed').remove()" class="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-lg hover:bg-gray-100 cursor-pointer font-bold">✕</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
 function renderFilePreview(doc) {
   if (typeof doc === 'string') {
-    // Legacy: just a filename string
     const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc);
-    return `<div class="border rounded-lg overflow-hidden w-44">
+    return `<div class="border rounded-lg overflow-hidden w-44 cursor-pointer hover:shadow-md transition-shadow">
       <div class="bg-gray-100 h-24 flex items-center justify-center text-2xl">${isImg?'🖼':'📄'}</div>
       <div class="p-2 text-xs text-gray-500 truncate">${doc}</div>
     </div>`;
   }
-  // Object with {name, type, dataUrl}
   if (doc.dataUrl && doc.type?.startsWith('image/')) {
-    return `<div class="border rounded-lg overflow-hidden w-44">
+    const escaped = doc.dataUrl.replace(/'/g, "\\'");
+    const nameEsc = (doc.name||'').replace(/'/g, "\\'");
+    return `<div class="border rounded-lg overflow-hidden w-44 cursor-pointer hover:shadow-md transition-shadow" onclick="openLightbox('${escaped}','${nameEsc}')">
       <img src="${doc.dataUrl}" class="h-24 w-full object-cover" alt="${doc.name}">
       <div class="p-2 text-xs text-gray-500 truncate">${doc.name}</div>
     </div>`;
