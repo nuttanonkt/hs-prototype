@@ -254,9 +254,9 @@ async function router() {
     'my-incidents': ()=> session?.role==='hotel' ? pageMyIncidents() : navigate('#/login'),
     'incident': ()=> session ? pageIncidentDetail(params[0]) : navigate('#/login'),
     'admin-dashboard': ()=> session?.role==='admin' ? pageAdminDashboard() : navigate('#/admin-login'),
-    'admin-members': ()=> session?.role==='admin' ? pageAdminMembers() : navigate('#/admin-login'),
+    'admin-members': ()=> session?.role==='admin' ? pageAdminMembers(params[0]) : navigate('#/admin-login'),
     'admin-member': ()=> session?.role==='admin' ? pageAdminMemberDetail(params[0]) : navigate('#/admin-login'),
-    'admin-incidents': ()=> session?.role==='admin' ? pageAdminIncidents() : navigate('#/admin-login'),
+    'admin-incidents': ()=> session?.role==='admin' ? pageAdminIncidents(params[0]) : navigate('#/admin-login'),
     'admin-incident': ()=> session?.role==='admin' ? pageAdminIncidentDetail(params[0]) : navigate('#/admin-login'),
   };
 
@@ -723,7 +723,7 @@ function pageDashboard() {
   const db = getDB();
   const s = getSession();
   const myIncidents = db.incidents.filter(i => i.createdBy === s.userId);
-  const recentIncidents = db.incidents.slice(0, 3);
+  const recentIncidents = sortByDate(db.incidents).slice(0, 3);
   render(hotelLayout(`
     <h1 class="text-xl font-bold mb-6">แดชบอร์ด</h1>
     <div class="grid grid-cols-3 gap-4 mb-8">
@@ -916,7 +916,7 @@ async function handleCreateIncident(e) {
 function pageMyIncidents() {
   const db = getDB();
   const s = getSession();
-  const mine = db.incidents.filter(i=>i.createdBy===s.userId);
+  const mine = sortByDate(db.incidents.filter(i=>i.createdBy===s.userId));
   render(hotelLayout(`
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-xl font-bold">เหตุการณ์ของฉัน (${mine.length})</h1>
@@ -977,22 +977,27 @@ function pageIncidentDetail(incId) {
 
 // ===================== ADMIN PAGES =====================
 
+function sortByDate(arr) {
+  return [...arr].sort((a,b) => (b.date||b.registeredAt||'').localeCompare(a.date||a.registeredAt||''));
+}
+
 function pageAdminDashboard() {
   const db = getDB();
   const pendingHotels = db.hotels.filter(h=>h.status==='pending');
-  const recentInc = db.incidents.slice(0, 5);
+  const recentInc = sortByDate(db.incidents).slice(0, 5);
+  const reviewingCount = db.incidents.filter(i=>i.blacklistStatus==='reviewing').length;
   render(adminLayout(`
     <h1 class="text-xl font-bold mb-6">แดชบอร์ดผู้ดูแลระบบ</h1>
     <div class="grid grid-cols-4 gap-4 mb-8">
-      <a href="#/admin-members" class="stat-card"><div class="text-2xl font-bold">${db.hotels.length}</div><div class="text-sm text-gray-500">สมาชิกทั้งหมด</div></a>
-      <a href="#/admin-members" class="stat-card"><div class="text-2xl font-bold text-warning">${pendingHotels.length}</div><div class="text-sm text-gray-500">รอการอนุมัติ</div></a>
-      <a href="#/admin-incidents" class="stat-card"><div class="text-2xl font-bold">${db.incidents.length}</div><div class="text-sm text-gray-500">เหตุการณ์ทั้งหมด</div></a>
-      <a href="#/admin-incidents" class="stat-card"><div class="text-2xl font-bold text-danger">${db.incidents.filter(i=>i.blacklistStatus==='reviewing').length}</div><div class="text-sm text-gray-500">รอดำเนินการ</div></a>
+      <a href="#/admin-members/all" class="stat-card"><div class="text-2xl font-bold">${db.hotels.length}</div><div class="text-sm text-gray-500">สมาชิกทั้งหมด</div></a>
+      <a href="#/admin-members/pending" class="stat-card"><div class="text-2xl font-bold text-warning">${pendingHotels.length}</div><div class="text-sm text-gray-500">รอการอนุมัติ</div></a>
+      <a href="#/admin-incidents/all" class="stat-card"><div class="text-2xl font-bold">${db.incidents.length}</div><div class="text-sm text-gray-500">เหตุการณ์ทั้งหมด</div></a>
+      <a href="#/admin-incidents/reviewing" class="stat-card"><div class="text-2xl font-bold text-danger">${reviewingCount}</div><div class="text-sm text-gray-500">รอดำเนินการ</div></a>
     </div>
     <div class="grid grid-cols-2 gap-6">
       <div class="card"><h3 class="font-semibold mb-4">สมาชิกรอการอนุมัติ</h3>
         <table><thead><tr><th>ชื่อโรงแรม</th><th>วันที่สมัคร</th><th></th></tr></thead><tbody>
-        ${pendingHotels.length?pendingHotels.map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
+        ${pendingHotels.length?sortByDate(pendingHotels).map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
         </tbody></table>
       </div>
       <div class="card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
@@ -1004,16 +1009,20 @@ function pageAdminDashboard() {
   `,'admin-dashboard'));
 }
 
-function pageAdminMembers() {
+function pageAdminMembers(filter) {
   const db = getDB();
+  let hotels = sortByDate(db.hotels);
+  if (filter && filter !== 'all') hotels = hotels.filter(h => h.status === filter);
+  const statusOptions = [{v:'all',l:'ทั้งหมด'},{v:'pending',l:'รอการอนุมัติ'},{v:'active',l:'ใช้งานอยู่'},{v:'rejected',l:'ถูกปฏิเสธ'}];
   render(adminLayout(`
     <div class="flex justify-between items-center mb-6"><h1 class="text-xl font-bold">สมาชิก</h1></div>
     <div class="card">
       <div class="flex gap-3 mb-4">
         <input class="input flex-1" placeholder="🔍  ค้นหาชื่อโรงแรม..." id="member-search" oninput="filterMembers()">
+        <div class="flex gap-1">${statusOptions.map(s=>`<a href="#/admin-members/${s.v}" class="btn ${(filter||'all')===s.v?'btn-primary':'btn-secondary'} text-xs !py-2 !px-3">${s.l}</a>`).join('')}</div>
       </div>
       <table><thead><tr><th>#</th><th>ชื่อโรงแรม</th><th>ผู้ติดต่อ</th><th>โทรศัพท์</th><th>วันที่สมัคร</th><th>สถานะ</th><th></th></tr></thead><tbody id="members-tbody">
-      ${db.hotels.map((h,i)=>`<tr data-name="${h.name}"><td>${i+1}</td><td>${h.name}</td><td>${h.contact}</td><td>${h.phone}</td><td>${h.registeredAt}</td><td>${badgeStatus(h.status)}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`).join('')}
+      ${hotels.length?hotels.map((h,i)=>`<tr data-name="${h.name}"><td>${i+1}</td><td>${h.name}</td><td>${h.contact}</td><td>${h.phone}</td><td>${h.registeredAt}</td><td>${badgeStatus(h.status)}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`).join(''):'<tr><td colspan="7" class="text-center py-8 text-gray-400">ไม่มีรายการ</td></tr>'}
       </tbody></table>
     </div>
   `,'admin-members'));
@@ -1071,8 +1080,11 @@ async function adminReject(hid) {
   if(h){h.status='rejected';await saveDBAndWait(db);toast('ปฏิเสธสมาชิกแล้ว','info');navigate('#/admin-members');}
 }
 
-function pageAdminIncidents() {
+function pageAdminIncidents(filter) {
   const db = getDB();
+  let incidents = sortByDate(db.incidents);
+  if (filter && filter !== 'all') incidents = incidents.filter(i => i.blacklistStatus === filter);
+  const statusOptions = [{v:'all',l:'ทั้งหมด'},{v:'reviewing',l:'รอตรวจสอบ'},{v:'blacklisted',l:'บัญชีดำ'},{v:'dismissed',l:'ยกเว้น'}];
   render(adminLayout(`
     <div class="flex justify-between items-center mb-6"><h1 class="text-xl font-bold">เหตุการณ์</h1>
       <span class="badge badge-reviewing">${db.incidents.filter(i=>i.blacklistStatus==='reviewing').length} รายการรอตรวจสอบ</span>
@@ -1080,13 +1092,14 @@ function pageAdminIncidents() {
     <div class="card">
       <div class="flex gap-3 mb-4">
         <input class="input flex-1" placeholder="🔍  ค้นหาโรงแรมหรือผู้ก่อเหตุ..." id="ainc-search" oninput="filterAdminIncidents()">
+        <div class="flex gap-1">${statusOptions.map(s=>`<a href="#/admin-incidents/${s.v}" class="btn ${(filter||'all')===s.v?'btn-primary':'btn-secondary'} text-xs !py-2 !px-3">${s.l}</a>`).join('')}</div>
       </div>
       <table><thead><tr><th>#</th><th>ผู้ก่อเหตุ</th><th>ประเภท</th><th>รายงานโดย</th><th>วันที่</th><th>บัญชีดำ</th><th></th></tr></thead><tbody id="ainc-tbody">
-      ${db.incidents.map((inc,i)=>{
+      ${incidents.length?incidents.map((inc,i)=>{
         const off=db.offenders.find(o=>o.id===inc.offenderId);
         const hotel=db.hotels.find(h=>h.id===inc.hotelId);
         return `<tr data-search="${off?.name||''} ${hotel?.name||''}"><td>${i+1}</td><td>${off?.name||'-'}</td><td>${inc.type}</td><td>${hotel?.name||'-'}</td><td>${inc.date}</td><td>${badgeStatus(inc.blacklistStatus)}</td><td><a href="#/admin-incident/${inc.id}" class="text-primary text-sm hover:underline">ตรวจสอบ</a></td></tr>`;
-      }).join('')}
+      }).join(''):'<tr><td colspan="7" class="text-center py-8 text-gray-400">ไม่มีรายการ</td></tr>'}
       </tbody></table>
     </div>
   `,'admin-incidents'));
