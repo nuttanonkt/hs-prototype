@@ -1001,8 +1001,8 @@ function pageAdminDashboard() {
         </tbody></table>
       </div>
       <div class="card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
-        <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>สถานะ</th></tr></thead><tbody>
-        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td>${badgeStatus(inc.blacklistStatus)}</td></tr>`}).join('')}
+        <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>วันที่/เวลา</th><th>สถานะ</th></tr></thead><tbody>
+        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td>${inc.date} ${inc.time||''}</td><td>${badgeStatus(inc.blacklistStatus)}</td></tr>`}).join('')}
         </tbody></table>
       </div>
     </div>
