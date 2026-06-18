@@ -994,15 +994,15 @@ function pageAdminDashboard() {
       <a href="#/admin-incidents/all" class="stat-card"><div class="text-2xl font-bold">${db.incidents.length}</div><div class="text-sm text-gray-500">เหตุการณ์ทั้งหมด</div></a>
       <a href="#/admin-incidents/reviewing" class="stat-card"><div class="text-2xl font-bold text-danger">${reviewingCount}</div><div class="text-sm text-gray-500">รอดำเนินการ</div></a>
     </div>
-    <div class="grid grid-cols-2 gap-6">
-      <div class="card"><h3 class="font-semibold mb-4">สมาชิกรอการอนุมัติ</h3>
+    <div class="grid grid-cols-5 gap-6">
+      <div class="col-span-2 card"><h3 class="font-semibold mb-4">สมาชิกรอการอนุมัติ</h3>
         <table><thead><tr><th>ชื่อโรงแรม</th><th>วันที่สมัคร</th><th></th></tr></thead><tbody>
         ${pendingHotels.length?sortByDate(pendingHotels).map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
         </tbody></table>
       </div>
-      <div class="card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
+      <div class="col-span-3 card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
         <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>วันที่/เวลา</th><th>สถานะ</th></tr></thead><tbody>
-        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td>${inc.date} ${inc.time||''}</td><td>${badgeStatus(inc.blacklistStatus)}</td></tr>`}).join('')}
+        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td class="whitespace-nowrap">${inc.date} ${inc.time||''}</td><td><span class="whitespace-nowrap">${badgeStatus(inc.blacklistStatus)}</span></td></tr>`}).join('')}
         </tbody></table>
       </div>
     </div>
