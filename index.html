@@ -266,7 +266,14 @@ async function router() {
     else pageLanding();
   } catch(e) {
     console.error('Page render error:', e);
-    pageLanding();
+    render(`<div class="max-w-xl mx-auto mt-20 card">
+      <h2 class="text-xl font-bold text-red-600 mb-4">Error</h2>
+      <p class="text-sm mb-2"><b>Route:</b> ${path}/${params.join('/')}</p>
+      <p class="text-sm mb-2"><b>Session:</b> ${JSON.stringify(session)}</p>
+      <p class="text-sm mb-4"><b>Error:</b> ${e.message}</p>
+      <pre class="bg-gray-100 p-3 rounded text-xs overflow-auto mb-4">${e.stack}</pre>
+      <a href="#/" class="btn btn-primary">กลับหน้าแรก</a>
+    </div>`);
   }
 }
 
