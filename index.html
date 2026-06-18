@@ -279,6 +279,27 @@ async function router() {
 
 window.addEventListener('hashchange', router);
 
+// ===================== DATE HELPERS =====================
+const TH_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function fmtDate(dateStr) {
+  if (!dateStr) return '-';
+  const [y,m,d] = dateStr.split('-');
+  return `${parseInt(d)} ${TH_MONTHS[parseInt(m)-1]} ${y}`;
+}
+function fmtDateTime(dateStr, timeStr) {
+  if (!dateStr) return '-';
+  return `${fmtDate(dateStr)}${timeStr ? ', '+timeStr+' น.' : ''}`;
+}
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (diff === 0) return 'วันนี้';
+  if (diff === 1) return 'เมื่อวาน';
+  if (diff < 7) return diff + ' วันที่แล้ว';
+  if (diff < 30) return Math.floor(diff/7) + ' สัปดาห์ที่แล้ว';
+  return Math.floor(diff/30) + ' เดือนที่แล้ว';
+}
+
 // ===================== FILE HELPERS =====================
 function readFilesAsBase64(fileInput) {
   return Promise.all([...fileInput.files].map(file => {
@@ -989,21 +1010,23 @@ function pageAdminDashboard() {
   render(adminLayout(`
     <h1 class="text-xl font-bold mb-6">แดชบอร์ดผู้ดูแลระบบ</h1>
     <div class="grid grid-cols-4 gap-4 mb-8">
-      <a href="#/admin-members/all" class="stat-card"><div class="text-2xl font-bold">${db.hotels.length}</div><div class="text-sm text-gray-500">สมาชิกทั้งหมด</div></a>
-      <a href="#/admin-members/pending" class="stat-card"><div class="text-2xl font-bold text-warning">${pendingHotels.length}</div><div class="text-sm text-gray-500">รอการอนุมัติ</div></a>
-      <a href="#/admin-incidents/all" class="stat-card"><div class="text-2xl font-bold">${db.incidents.length}</div><div class="text-sm text-gray-500">เหตุการณ์ทั้งหมด</div></a>
-      <a href="#/admin-incidents/reviewing" class="stat-card"><div class="text-2xl font-bold text-danger">${reviewingCount}</div><div class="text-sm text-gray-500">รอดำเนินการ</div></a>
+      <a href="#/admin-members/all" class="stat-card"><div class="flex items-center justify-between"><span class="text-3xl font-bold">${db.hotels.length}</span><span class="text-2xl opacity-40">🏨</span></div><div class="text-sm text-gray-500 mt-2">สมาชิกทั้งหมด</div></a>
+      <a href="#/admin-members/pending" class="stat-card border-yellow-200 bg-yellow-50/50"><div class="flex items-center justify-between"><span class="text-3xl font-bold text-yellow-600">${pendingHotels.length}</span><span class="text-2xl opacity-40">⏳</span></div><div class="text-sm text-gray-500 mt-2">รอการอนุมัติ</div></a>
+      <a href="#/admin-incidents/all" class="stat-card"><div class="flex items-center justify-between"><span class="text-3xl font-bold">${db.incidents.length}</span><span class="text-2xl opacity-40">📋</span></div><div class="text-sm text-gray-500 mt-2">เหตุการณ์ทั้งหมด</div></a>
+      <a href="#/admin-incidents/reviewing" class="stat-card border-red-200 bg-red-50/50"><div class="flex items-center justify-between"><span class="text-3xl font-bold text-red-600">${reviewingCount}</span><span class="text-2xl opacity-40">🔍</span></div><div class="text-sm text-gray-500 mt-2">รอดำเนินการ</div></a>
     </div>
     <div class="grid grid-cols-2 gap-6">
-      <div class="card"><h3 class="font-semibold mb-4">สมาชิกรอการอนุมัติ</h3>
-        <table><thead><tr><th>ชื่อโรงแรม</th><th>วันที่สมัคร</th><th></th></tr></thead><tbody>
-        ${pendingHotels.length?sortByDate(pendingHotels).map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
-        </tbody></table>
+      <div class="card"><h3 class="font-semibold mb-4">⏳ สมาชิกรอการอนุมัติ</h3>
+        ${pendingHotels.length?sortByDate(pendingHotels).map(h=>`<div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+          <div><div class="font-medium">${h.name}</div><div class="text-xs text-gray-400">${fmtDate(h.registeredAt)} &middot; ${timeAgo(h.registeredAt)}</div></div>
+          <a href="#/admin-member/${h.id}" class="btn btn-primary text-xs !py-1.5 !px-4">ตรวจสอบ</a>
+        </div>`).join(''):'<div class="text-center py-8 text-gray-400">ไม่มีรายการรออนุมัติ ✅</div>'}
       </div>
-      <div class="card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
-        <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>วันที่/เวลา</th><th>สถานะ</th></tr></thead><tbody>
-        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td>${inc.date} ${inc.time||''}</td><td>${badgeStatus(inc.blacklistStatus)}</td></tr>`}).join('')}
-        </tbody></table>
+      <div class="card"><h3 class="font-semibold mb-4">📋 เหตุการณ์ล่าสุด</h3>
+        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<a href="#/admin-incident/${inc.id}" class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 -mx-2 px-2 rounded cursor-pointer">
+          <div class="flex-1 min-w-0"><div class="font-medium truncate">${h?.name||'-'}</div><div class="text-xs text-gray-400">${inc.type} &middot; ${fmtDateTime(inc.date,inc.time)}</div></div>
+          <div class="ml-3 flex-shrink-0">${badgeStatus(inc.blacklistStatus)}</div>
+        </a>`}).join('')}
       </div>
     </div>
   `,'admin-dashboard'));
