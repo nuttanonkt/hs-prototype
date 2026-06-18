@@ -290,7 +290,7 @@ function readFilesAsBase64(fileInput) {
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX = 400;
+            const MAX = 1400;
             let w = img.width, h = img.height;
             if (w > MAX || h > MAX) {
               if (w > h) { h = h * MAX / w; w = MAX; }
@@ -298,7 +298,7 @@ function readFilesAsBase64(fileInput) {
             }
             canvas.width = w; canvas.height = h;
             canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            resolve({ name: file.name, type: file.type, dataUrl: canvas.toDataURL('image/jpeg', 0.7) });
+            resolve({ name: file.name, type: file.type, dataUrl: canvas.toDataURL('image/jpeg', 0.9) });
           };
           img.src = e.target.result;
         };
