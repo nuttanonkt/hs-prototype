@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HS — Hotel Safety & Incident Reporting</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{navy:'#0f172a','navy-light':'#1e293b',primary:'#2563eb','primary-dark':'#1d4ed8',danger:'#ef4444',warning:'#f59e0b',success:'#22c55e'}}}}</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*{font-family:'Inter',system-ui,sans-serif}
+.fade-in{animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.sidebar-item{transition:all .15s}
+.sidebar-item:hover{background:rgba(255,255,255,.08)}
+.sidebar-item.active{background:rgba(37,99,235,.25);color:#60a5fa}
+.btn{padding:10px 24px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;transition:all .15s;border:none}
+.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
+.btn-secondary{background:#fff;color:#334155;border:1px solid #d1d5db}.btn-secondary:hover{background:#f8fafc}
+.btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+.btn-success{background:#22c55e;color:#fff}.btn-success:hover{background:#16a34a}
+.btn-warning{background:#f59e0b;color:#fff}.btn-warning:hover{background:#d97706}
+.input{width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;outline:none;transition:border .15s}
+.input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px}
+.badge{display:inline-block;padding:3px 12px;border-radius:99px;font-size:12px;font-weight:600}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-active{background:#d1fae5;color:#065f46}
+.badge-rejected{background:#fee2e2;color:#991b1b}
+.badge-blacklisted{background:#1e293b;color:#f1f5f9}
+.badge-dismissed{background:#f1f5f9;color:#64748b}
+.badge-reviewing{background:#dbeafe;color:#1e40af}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);padding:10px 28px;border-radius:10px;color:#fff;font-size:14px;font-weight:500;transition:transform .3s,opacity .3s;opacity:0;z-index:9999}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-success{background:#22c55e}.toast-error{background:#ef4444}.toast-info{background:#2563eb}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:12px 16px;font-size:13px;font-weight:600;color:#64748b;background:#f8fafc;border-bottom:1px solid #e5e7eb}
+td{padding:12px 16px;font-size:14px;border-bottom:1px solid #f1f5f9}
+tr:hover td{background:#f8fafc}
+.stat-card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:20px;cursor:pointer;transition:all .15s}
+.stat-card:hover{border-color:#2563eb;box-shadow:0 2px 12px rgba(37,99,235,.1)}
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app"></div>
+<div id="toast-container"></div>
+
+<script>
+// ===================== DATA STORE =====================
+const DB_KEY = 'hs_prototype_db';
+
+function getDB() {
+  const raw = localStorage.getItem(DB_KEY);
+  if (raw) return JSON.parse(raw);
+  return seedData();
+}
+
+function saveDB(db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+function seedData() {
+  const db = {
+    users: [
+      {id:'u1',email:'hotel@grand.com',password:'1234',role:'hotel',hotelId:'h1',name:'Khun Somkiat'},
+      {id:'u2',email:'admin@hs.com',password:'1234',role:'admin',name:'HS Admin'},
+      {id:'u3',email:'hotel@sunrise.com',password:'1234',role:'hotel',hotelId:'h2',name:'Khun Pattra'},
+    ],
+    hotels: [
+      {id:'h1',name:'แกรนด์ โฮเต็ล กรุงเทพฯ',address:'123 ถ.สีลม บางรัก กรุงเทพฯ 10500',contact:'คุณสมเกียรติ พิชัย',phone:'092-111-2233',email:'somkiat@grandhotel.co.th',license:'BL-2025-00142',status:'active',registeredAt:'2026-05-08',documents:['business_license.pdf','hotel_certificate.pdf','hotel_front_photo.jpg']},
+      {id:'h2',name:'ซันไรส์ รีสอร์ท ภูเก็ต',address:'456 ถ.ป่าตอง ป่าตอง ภูเก็ต 83150',contact:'คุณพัตรา สมบูรณ์',phone:'083-456-7890',email:'pattra@sunrise.com',license:'BL-2025-00198',status:'active',registeredAt:'2026-05-01',documents:['business_license.pdf']},
+      {id:'h3',name:'เดอะ พาร์ค โฮเต็ล เชียงใหม่',address:'789 ถ.นิมมานเหมินท์ เชียงใหม่ 50200',contact:'คุณวันชัย ดีใจ',phone:'081-234-5678',email:'wanchai@thepark.com',license:'BL-2025-00165',status:'active',registeredAt:'2026-04-22',documents:['business_license.pdf','hotel_certificate.pdf']},
+      {id:'h4',name:'โลตัส สวีทส์ โคราช',address:'321 ถ.มิตรภาพ เมืองนครราชสีมา 30000',contact:'คุณนิภา จันทร์แก้ว',phone:'085-321-6547',email:'nipa@lotus.com',license:'BL-2025-00201',status:'active',registeredAt:'2026-04-15',documents:['business_license.pdf']},
+      {id:'h5',name:'นารายณ์ โฮเต็ล กรุงเทพฯ',address:'999 ถ.ราชดำริ ปทุมวัน กรุงเทพฯ 10330',contact:'คุณมานะ ศรีสุข',phone:'089-654-3210',email:'mana@narai.com',license:'BL-2025-00088',status:'rejected',registeredAt:'2026-04-10',documents:['business_license.pdf']},
+    ],
+    offenders: [
+      {id:'o1',name:'Somchai Jaidee',nameTh:'สมชาย ใจดี',idCard:'1-1234-56789-01-2',passport:'TH1234567',nationality:'ไทย',dob:'15 มกราคม 2533',photo:null},
+      {id:'o2',name:'Kasem Sriwan',nameTh:'เกษม ศรีวัลย์',idCard:'1-5678-90123-45-6',passport:'',nationality:'ไทย',dob:'22 มีนาคม 2528',photo:null},
+      {id:'o3',name:'Noi Saengsuk',nameTh:'น้อย แสงสุข',idCard:'1-9012-34567-89-0',passport:'',nationality:'ไทย',dob:'8 กรกฎาคม 2535',photo:null},
+      {id:'o4',name:'Ploy Charoenwong',nameTh:'พลอย เจริญวงศ์',idCard:'1-3456-78901-23-4',passport:'TH9876543',nationality:'ไทย',dob:'30 พฤศจิกายน 2530',photo:null},
+    ],
+    incidents: [
+      {id:'inc1',type:'ขโมยของในห้อง',date:'2026-05-10',time:'14:30',hotelId:'h1',offenderId:'o1',description:'แขกแจ้งว่ากระเป๋าสตางค์และแล็ปท็อปหายจากห้อง 305 ระหว่างทำความสะอาดห้องพัก',attachments:['room305_evidence.jpg','cctv_screenshot_14h22.png'],blacklistStatus:'reviewing',adminNote:'',createdBy:'u1'},
+      {id:'inc2',type:'การฉ้อโกง',date:'2026-05-08',time:'10:15',hotelId:'h2',offenderId:'o2',description:'ชำระค่าห้องด้วยบัตรเครดิตปลอม จำนวน 15,000 บาท',attachments:['receipt.pdf'],blacklistStatus:'blacklisted',adminNote:'ยืนยันบัตรปลอม',createdBy:'u3'},
+      {id:'inc3',type:'พฤติกรรมไม่เหมาะสม',date:'2026-05-05',time:'23:45',hotelId:'h3',offenderId:'o3',description:'ทำเสียงดังรบกวนผู้เข้าพักอื่นและทำลายทรัพย์สินในห้อง',attachments:['damage_photo.jpg'],blacklistStatus:'reviewing',adminNote:'',createdBy:'u1'},
+      {id:'inc4',type:'ทำลายทรัพย์สิน',date:'2026-05-01',time:'08:00',hotelId:'h4',offenderId:'o4',description:'ทำลายเฟอร์นิเจอร์ในห้องพักมูลค่ากว่า 50,000 บาท',attachments:[],blacklistStatus:'dismissed',adminNote:'หลักฐานไม่เพียงพอ',createdBy:'u1'},
+      {id:'inc5',type:'ขโมยของในห้อง',date:'2026-04-28',time:'16:20',hotelId:'h5',offenderId:'o1',description:'พนักงานทำความสะอาดพบของหายจากห้อง 502 กล้องวงจรปิดจับได้ผู้ต้องสงสัย',attachments:['cctv_502.png'],blacklistStatus:'blacklisted',adminNote:'ซ้ำกับเหตุการณ์ก่อนหน้า',createdBy:'u1'},
+    ],
+    pendingHotels: [],
+    session: null,
+  };
+  saveDB(db);
+  return db;
+}
+
+// ===================== AUTH =====================
+function login(email, password) {
+  const db = getDB();
+  const user = db.users.find(u => u.email === email && u.password === password);
+  if (!user) return null;
+  if (user.role === 'hotel') {
+    const hotel = db.hotels.find(h => h.id === user.hotelId);
+    if (hotel && hotel.status === 'suspended') return {error:'suspended'};
+    if (hotel && hotel.status === 'rejected') return {error:'rejected'};
+    if (hotel && hotel.status === 'pending') return {error:'pending'};
+  }
+  db.session = {userId:user.id,role:user.role,hotelId:user.hotelId};
+  saveDB(db);
+  return user;
+}
+
+function logout() {
+  const db = getDB();
+  db.session = null;
+  saveDB(db);
+  navigate('#/');
+}
+
+function getSession() {
+  return getDB().session;
+}
+
+function getCurrentUser() {
+  const s = getSession();
+  if (!s) return null;
+  return getDB().users.find(u => u.id === s.userId);
+}
+
+function getCurrentHotel() {
+  const s = getSession();
+  if (!s || !s.hotelId) return null;
+  return getDB().hotels.find(h => h.id === s.hotelId);
+}
+
+// ===================== ROUTER =====================
+function navigate(hash) {
+  window.location.hash = hash;
+}
+
+function getRoute() {
+  return window.location.hash || '#/';
+}
+
+function router() {
+  const hash = getRoute();
+  const [path, ...params] = hash.replace('#/','').split('/');
+  const session = getSession();
+
+  const routes = {
+    '': pageLanding,
+    'login': pageLogin,
+    'admin-login': pageAdminLogin,
+    'register': pageRegister,
+    'consent': pageConsent,
+    'pending': pagePending,
+    'rejected': pageRejected,
+    'edit-reapply': pageEditReapply,
+    'suspended': pageSuspended,
+    'forgot-password': pageForgotPassword,
+    'reset-email': pageResetEmail,
+    'set-password': pageSetPassword,
+    'dashboard': ()=> session?.role==='hotel' ? pageDashboard() : navigate('#/login'),
+    'search': ()=> session?.role==='hotel' ? pageSearch() : navigate('#/login'),
+    'offender': ()=> session ? pageOffenderDetail(params[0]) : navigate('#/login'),
+    'create-incident': ()=> session?.role==='hotel' ? pageCreateIncident(params[0]) : navigate('#/login'),
+    'my-incidents': ()=> session?.role==='hotel' ? pageMyIncidents() : navigate('#/login'),
+    'incident': ()=> session ? pageIncidentDetail(params[0]) : navigate('#/login'),
+    'admin-dashboard': ()=> session?.role==='admin' ? pageAdminDashboard() : navigate('#/admin-login'),
+    'admin-members': ()=> session?.role==='admin' ? pageAdminMembers() : navigate('#/admin-login'),
+    'admin-member': ()=> session?.role==='admin' ? pageAdminMemberDetail(params[0]) : navigate('#/admin-login'),
+    'admin-incidents': ()=> session?.role==='admin' ? pageAdminIncidents() : navigate('#/admin-login'),
+    'admin-incident': ()=> session?.role==='admin' ? pageAdminIncidentDetail(params[0]) : navigate('#/admin-login'),
+  };
+
+  const handler = routes[path];
+  if (handler) handler();
+  else pageLanding();
+}
+
+window.addEventListener('hashchange', router);
+
+// ===================== COMPONENTS =====================
+function render(html) {
+  document.getElementById('app').innerHTML = html;
+  document.getElementById('app').className = 'fade-in';
+}
+
+function toast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type} show`;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300)},2500);
+}
+
+function publicLayout(content) {
+  return `<div class="min-h-screen bg-gray-50">
+    <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+      <a href="#/" class="flex items-center gap-3 cursor-pointer">
+        <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-sm">HS</div>
+        <div><div class="font-bold text-navy text-sm">HS</div><div class="text-xs text-gray-500">ความปลอดภัยโรงแรม</div></div>
+      </a>
+      <div class="flex gap-3">
+        <a href="#/login" class="btn btn-secondary text-sm !py-2 !px-4">เข้าสู่ระบบ</a>
+        <a href="#/register" class="btn btn-primary text-sm !py-2 !px-4">สมัครใช้งาน</a>
+      </div>
+    </header>
+    <main>${content}</main>
+  </div>`;
+}
+
+function hotelLayout(content, activePage='') {
+  const hotel = getCurrentHotel();
+  const items = [
+    {icon:'⊞',label:'แดชบอร์ด',href:'#/dashboard',key:'dashboard'},
+    {icon:'🔍',label:'ค้นหาผู้ก่อเหตุ',href:'#/search',key:'search'},
+    {icon:'＋',label:'รายงานเหตุการณ์',href:'#/create-incident',key:'create-incident'},
+    {icon:'☰',label:'เหตุการณ์ของฉัน',href:'#/my-incidents',key:'my-incidents'},
+  ];
+  return `<div class="flex min-h-screen">
+    <aside class="w-60 bg-navy text-white flex flex-col flex-shrink-0">
+      <div class="p-5 border-b border-white/10">
+        <a href="#/dashboard" class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-xs">HS</div>
+          <div class="text-sm font-semibold">ความปลอดภัยโรงแรม</div>
+        </a>
+      </div>
+      <nav class="flex-1 py-3">
+        ${items.map(i=>`<a href="${i.href}" class="sidebar-item flex items-center gap-3 px-5 py-3 text-sm ${activePage===i.key?'active':''}">${i.icon} ${i.label}</a>`).join('')}
+      </nav>
+      ${hotel?`<div class="p-4 border-t border-white/10 text-xs"><div class="text-gray-400">🏨 ${hotel.name}</div></div>`:''}
+    </aside>
+    <div class="flex-1 flex flex-col">
+      <header class="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-6">
+        <div></div>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-gray-600">${getCurrentUser()?.name||''}</span>
+          <button onclick="logout()" class="text-xl cursor-pointer" title="ออกจากระบบ">👤</button>
+        </div>
+      </header>
+      <main class="flex-1 p-6 overflow-auto fade-in">${content}</main>
+    </div>
+  </div>`;
+}
+
+function adminLayout(content, activePage='') {
+  const items = [
+    {label:'แดชบอร์ด',href:'#/admin-dashboard',key:'admin-dashboard'},
+    {label:'สมาชิก',href:'#/admin-members',key:'admin-members'},
+    {label:'เหตุการณ์',href:'#/admin-incidents',key:'admin-incidents'},
+  ];
+  return `<div class="flex min-h-screen">
+    <aside class="w-60 bg-navy text-white flex flex-col flex-shrink-0">
+      <div class="p-5 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">HS</div>
+          <div><div class="text-sm font-semibold">HS</div><div class="text-[10px] text-gray-400">แผงผู้ดูแลระบบ</div></div>
+        </div>
+      </div>
+      <nav class="flex-1 py-3">
+        ${items.map(i=>`<a href="${i.href}" class="sidebar-item flex items-center gap-3 px-5 py-3 text-sm ${activePage===i.key?'active':''}">${i.label}</a>`).join('')}
+      </nav>
+    </aside>
+    <div class="flex-1 flex flex-col">
+      <header class="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-6">
+        <div></div>
+        <div class="flex items-center gap-4">
+          <span class="badge bg-gray-100 text-gray-700 text-xs">ผู้ดูแลระบบ</span>
+          <button onclick="logout()" class="text-sm text-gray-500 hover:text-red-500 cursor-pointer">ออกจากระบบ</button>
+        </div>
+      </header>
+      <main class="flex-1 p-6 overflow-auto fade-in">${content}</main>
+    </div>
+  </div>`;
+}
+
+function badgeStatus(status) {
+  const map = {active:'badge-active',pending:'badge-pending',rejected:'badge-rejected',suspended:'badge-rejected',reviewing:'badge-reviewing',blacklisted:'badge-blacklisted',dismissed:'badge-dismissed'};
+  const labels = {active:'ใช้งานอยู่',pending:'รอการอนุมัติ',rejected:'ถูกปฏิเสธ',suspended:'ถูกระงับ',reviewing:'รอการตรวจสอบ',blacklisted:'อยู่ในบัญชีดำ',dismissed:'ยกเว้น'};
+  return `<span class="badge ${map[status]||'badge-pending'}">${labels[status]||status}</span>`;
+}
+
+// ===================== PAGES =====================
+
+// --- Landing ---
+function pageLanding() {
+  render(publicLayout(`
+    <div class="max-w-4xl mx-auto py-20 px-6 text-center">
+      <h1 class="text-4xl font-bold text-navy mb-4">ระบบรายงานเหตุการณ์<br>ความปลอดภัยโรงแรม</h1>
+      <p class="text-gray-600 text-lg mb-10">แพลตฟอร์มแจ้งเหตุและตรวจสอบบุคคลต้องสงสัยสำหรับธุรกิจโรงแรมทั่วประเทศ</p>
+      <div class="flex gap-4 justify-center mb-16">
+        <a href="#/register" class="btn btn-primary text-base !py-3 !px-8">สมัครใช้งานฟรี</a>
+        <a href="#/login" class="btn btn-secondary text-base !py-3 !px-8">เข้าสู่ระบบ</a>
+      </div>
+      <div class="grid grid-cols-3 gap-6 text-left">
+        <div class="card"><div class="text-2xl mb-3">🔍</div><h3 class="font-semibold mb-2">ค้นหาผู้ก่อเหตุ</h3><p class="text-sm text-gray-600">ตรวจสอบประวัติบุคคลต้องสงสัยจากฐานข้อมูลกลาง</p></div>
+        <div class="card"><div class="text-2xl mb-3">📋</div><h3 class="font-semibold mb-2">รายงานเหตุการณ์</h3><p class="text-sm text-gray-600">บันทึกเหตุการณ์พร้อมหลักฐานเพื่อแจ้งโรงแรมทั่วประเทศ</p></div>
+        <div class="card"><div class="text-2xl mb-3">🛡️</div><h3 class="font-semibold mb-2">บัญชีดำ</h3><p class="text-sm text-gray-600">ระบบบัญชีดำกลางป้องกันผู้ก่อเหตุซ้ำข้ามโรงแรม</p></div>
+      </div>
+      <div class="mt-12 pt-8 border-t border-gray-200">
+        <a href="#/admin-login" class="text-sm text-gray-400 hover:text-primary">👤 สำหรับผู้ดูแลระบบ HS</a>
+      </div>
+    </div>
+  `));
+}
+
+// --- Login ---
+function pageLogin() {
+  render(publicLayout(`
+    <div class="max-w-md mx-auto mt-20">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-1">เข้าสู่ระบบ HS</h2>
+        <p class="text-sm text-gray-500 mb-6">กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านของคุณ</p>
+        <form id="login-form" onsubmit="handleLogin(event)">
+          <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">อีเมล <span class="text-red-500">*</span></label><input type="email" class="input" id="login-email" placeholder="your@hotel.com" required></div>
+          <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">รหัสผ่าน <span class="text-red-500">*</span></label><input type="password" class="input" id="login-pass" placeholder="••••••••" required></div>
+          <div class="text-right mb-4"><a href="#/forgot-password" class="text-sm text-primary hover:underline">ลืมรหัสผ่าน?</a></div>
+          <button type="submit" class="btn btn-primary w-full">เข้าสู่ระบบ</button>
+        </form>
+        <div class="text-center mt-4 text-sm text-gray-500">ยังไม่มีบัญชี? <a href="#/register" class="text-primary hover:underline">สมัครใช้งาน</a></div>
+        <div class="mt-6 pt-4 border-t text-center"><a href="#/admin-login" class="text-xs text-gray-400 hover:text-primary">👤 สำหรับผู้ดูแลระบบ HS</a></div>
+      </div>
+      <div class="mt-4 text-center text-xs text-gray-400">ทดสอบ: hotel@grand.com / 1234</div>
+    </div>
+  `));
+}
+
+function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const pass = document.getElementById('login-pass').value;
+  const result = login(email, pass);
+  if (!result) { toast('อีเมลหรือรหัสผ่านไม่ถูกต้อง','error'); return; }
+  if (result.error === 'suspended') { navigate('#/suspended'); return; }
+  if (result.error === 'rejected') { navigate('#/rejected'); return; }
+  if (result.error === 'pending') { navigate('#/pending'); return; }
+  toast('เข้าสู่ระบบสำเร็จ','success');
+  navigate('#/dashboard');
+}
+
+// --- Admin Login ---
+function pageAdminLogin() {
+  render(publicLayout(`
+    <div class="max-w-md mx-auto mt-20">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-1">เข้าสู่ระบบผู้ดูแลระบบ</h2>
+        <p class="text-sm text-gray-500 mb-6">สำหรับผู้ดูแลระบบ HS เท่านั้น</p>
+        <form onsubmit="handleAdminLogin(event)">
+          <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">อีเมล <span class="text-red-500">*</span></label><input type="email" class="input" id="alogin-email" placeholder="admin@hs.com" required></div>
+          <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">รหัสผ่าน <span class="text-red-500">*</span></label><input type="password" class="input" id="alogin-pass" placeholder="••••••••" required></div>
+          <button type="submit" class="btn btn-primary w-full">เข้าสู่ระบบ</button>
+        </form>
+        <div class="text-center mt-4"><a href="#/login" class="text-sm text-gray-500 hover:text-primary">← กลับสู่หน้าเข้าสู่ระบบโรงแรม</a></div>
+      </div>
+      <div class="mt-4 text-center text-xs text-gray-400">ทดสอบ: admin@hs.com / 1234</div>
+    </div>
+  `));
+}
+
+function handleAdminLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('alogin-email').value;
+  const pass = document.getElementById('alogin-pass').value;
+  const result = login(email, pass);
+  if (!result || result.role !== 'admin') { toast('อีเมลหรือรหัสผ่านไม่ถูกต้อง','error'); return; }
+  toast('เข้าสู่ระบบสำเร็จ','success');
+  navigate('#/admin-dashboard');
+}
+
+// --- Register ---
+function pageRegister() {
+  render(publicLayout(`
+    <div class="max-w-2xl mx-auto mt-10">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-6">สมัครใช้งานระบบ HS</h2>
+        <form onsubmit="handleRegister(event)">
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">ชื่อโรงแรม <span class="text-red-500">*</span></label><input class="input" id="reg-name" required placeholder="ชื่อโรงแรมของคุณ"></div>
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">เลขใบอนุญาต <span class="text-red-500">*</span></label><input class="input" id="reg-license" required placeholder="BL-XXXX-XXXXX"></div>
+          </div>
+          <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">ที่อยู่ <span class="text-red-500">*</span></label><input class="input" id="reg-address" required placeholder="ที่อยู่โรงแรม"></div>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">ชื่อผู้ติดต่อ <span class="text-red-500">*</span></label><input class="input" id="reg-contact" required placeholder="ชื่อ-นามสกุล"></div>
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label><input class="input" id="reg-phone" required placeholder="0XX-XXX-XXXX"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">อีเมล <span class="text-red-500">*</span></label><input type="email" class="input" id="reg-email" required placeholder="your@hotel.com"></div>
+            <div><label class="text-sm font-medium text-gray-700 mb-1 block">รหัสผ่าน <span class="text-red-500">*</span></label><input type="password" class="input" id="reg-pass" required placeholder="อย่างน้อย 4 ตัวอักษร" minlength="4"></div>
+          </div>
+          <div class="mb-6"><label class="text-sm font-medium text-gray-700 mb-1 block">เอกสารแนบ</label><input type="file" class="input !py-2" multiple id="reg-docs"><p class="text-xs text-gray-400 mt-1">ใบอนุญาตประกอบธุรกิจ, หนังสือรับรอง</p></div>
+          <div class="flex gap-3">
+            <button type="submit" class="btn btn-primary flex-1">สมัครใช้งาน</button>
+            <a href="#/" class="btn btn-secondary flex-1 text-center">ยกเลิก</a>
+          </div>
+        </form>
+        <div class="text-center mt-4 text-sm text-gray-500">มีบัญชีอยู่แล้ว? <a href="#/login" class="text-primary hover:underline">เข้าสู่ระบบ</a></div>
+      </div>
+    </div>
+  `));
+}
+
+function handleRegister(e) {
+  e.preventDefault();
+  const db = getDB();
+  const hid = 'h' + Date.now();
+  const uid = 'u' + Date.now();
+  const email = document.getElementById('reg-email').value;
+  if (db.users.find(u=>u.email===email)) { toast('อีเมลนี้มีอยู่ในระบบแล้ว','error'); return; }
+  const hotel = {
+    id:hid,name:document.getElementById('reg-name').value,
+    address:document.getElementById('reg-address').value,
+    contact:document.getElementById('reg-contact').value,
+    phone:document.getElementById('reg-phone').value,
+    email:email,license:document.getElementById('reg-license').value,
+    status:'pending',registeredAt:new Date().toISOString().split('T')[0],
+    documents:['business_license.pdf']
+  };
+  const user = {id:uid,email:email,password:document.getElementById('reg-pass').value,role:'hotel',hotelId:hid,name:hotel.contact};
+  db.hotels.push(hotel);
+  db.users.push(user);
+  saveDB(db);
+  navigate('#/consent');
+}
+
+// --- Consent PDPA ---
+function pageConsent() {
+  render(publicLayout(`
+    <div class="max-w-2xl mx-auto mt-10">
+      <div class="card">
+        <h2 class="text-xl font-bold mb-4">นโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA)</h2>
+        <div class="bg-gray-50 rounded-lg p-4 mb-6 max-h-64 overflow-y-auto text-sm text-gray-600 leading-relaxed">
+          <p class="mb-3">ระบบ HS Hotel Safety จะเก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคลของท่าน เพื่อวัตถุประสงค์ดังต่อไปนี้:</p>
+          <ol class="list-decimal pl-5 space-y-2">
+            <li>เพื่อการลงทะเบียนและยืนยันตัวตนของโรงแรมสมาชิก</li>
+            <li>เพื่อการรายงานและตรวจสอบเหตุการณ์ด้านความปลอดภัย</li>
+            <li>เพื่อการจัดทำและบริหารจัดการบัญชีดำบุคคลต้องสงสัย</li>
+            <li>เพื่อการแจ้งเตือนและสื่อสารกับสมาชิกในระบบ</li>
+            <li>เพื่อการวิเคราะห์ข้อมูลเชิงสถิติและปรับปรุงระบบ</li>
+          </ol>
+          <p class="mt-3">ข้อมูลของท่านจะถูกเก็บรักษาอย่างปลอดภัยและจะไม่ถูกเปิดเผยต่อบุคคลภายนอกโดยไม่ได้รับความยินยอม</p>
+        </div>
+        <label class="flex items-center gap-3 mb-6 cursor-pointer"><input type="checkbox" id="consent-check" class="w-5 h-5"><span class="text-sm">ข้าพเจ้ายอมรับนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) และยินยอมให้ระบบเก็บรวบรวมข้อมูล</span></label>
+        <div class="flex gap-3">
+          <button onclick="handleConsent()" class="btn btn-primary flex-1">ยอมรับและดำเนินการต่อ</button>
+          <a href="#/" class="btn btn-secondary flex-1 text-center">ยกเลิก</a>
+        </div>
+      </div>
+    </div>
+  `));
+}
+
+function handleConsent() {
+  if (!document.getElementById('consent-check').checked) { toast('กรุณายอมรับนโยบาย PDPA','error'); return; }
+  toast('สมัครสมาชิกสำเร็จ','success');
+  navigate('#/pending');
+}
+
+// --- Pending ---
+function pagePending() {
+  render(publicLayout(`<div class="max-w-lg mx-auto mt-20 text-center card">
+    <div class="text-5xl mb-4">⏳</div>
+    <h2 class="text-xl font-bold mb-2">คำขอของคุณอยู่ระหว่างการตรวจสอบ</h2>
+    <p class="text-gray-600 mb-6">ผู้ดูแลระบบกำลังตรวจสอบข้อมูลของคุณ กรุณารอการอนุมัติ</p>
+    <div class="flex gap-3 justify-center">
+      <a href="#/" class="btn btn-primary">กลับหน้าแรก</a>
+      <a href="#/login" class="btn btn-secondary">ติดต่อเรา</a>
+    </div>
+  </div>`));
+}
+
+// --- Rejected ---
+function pageRejected() {
+  render(publicLayout(`<div class="max-w-lg mx-auto mt-20 text-center card">
+    <div class="text-5xl mb-4">❌</div>
+    <h2 class="text-xl font-bold mb-2 text-red-600">คำขอถูกปฏิเสธ</h2>
+    <p class="text-gray-600 mb-6">คำขอสมัครสมาชิกของคุณถูกปฏิเสธ กรุณาตรวจสอบข้อมูลและลองใหม่อีกครั้ง</p>
+    <div class="flex gap-3 justify-center">
+      <a href="#/edit-reapply" class="btn btn-warning">แก้ไขและส่งคำขอใหม่</a>
+      <a href="#/" class="btn btn-secondary">ออกจากระบบ</a>
+    </div>
+  </div>`));
+}
+
+// --- Edit & Re-apply ---
+function pageEditReapply() {
+  render(publicLayout(`<div class="max-w-xl mx-auto mt-10">
+    <div class="card">
+      <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6 text-sm text-orange-800">⚠️ คำขอก่อนหน้าถูกปฏิเสธ กรุณาแก้ไขข้อมูลและส่งใหม่</div>
+      <h2 class="text-xl font-bold mb-6">แก้ไขข้อมูลและส่งคำขอใหม่</h2>
+      <form onsubmit="handleReapply(event)">
+        <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">ชื่อโรงแรม <span class="text-red-500">*</span></label><input class="input" id="reapply-name" required></div>
+        <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">อีเมลติดต่อ <span class="text-red-500">*</span></label><input type="email" class="input" id="reapply-email" required></div>
+        <div class="mb-6"><label class="text-sm font-medium text-gray-700 mb-1 block">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label><input class="input" id="reapply-phone" required></div>
+        <div class="flex gap-3">
+          <button type="submit" class="btn btn-primary flex-1">ส่งคำขอใหม่</button>
+          <a href="#/rejected" class="btn btn-secondary flex-1 text-center">ยกเลิก</a>
+        </div>
+      </form>
+    </div>
+  </div>`));
+}
+function handleReapply(e) { e.preventDefault(); toast('ส่งคำขอใหม่สำเร็จ','success'); navigate('#/pending'); }
+
+// --- Suspended ---
+function pageSuspended() {
+  render(publicLayout(`<div class="max-w-lg mx-auto mt-20 text-center card">
+    <div class="text-5xl mb-4">🚫</div>
+    <h2 class="text-xl font-bold mb-2 text-red-600">บัญชีถูกระงับ</h2>
+    <p class="text-gray-600 mb-6">บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ</p>
+    <div class="flex gap-3 justify-center">
+      <a href="#/login" class="btn btn-primary">← กลับหน้าเข้าสู่ระบบ</a>
+    </div>
+  </div>`));
+}
+
+// --- Forgot Password ---
+function pageForgotPassword() {
+  render(publicLayout(`<div class="max-w-md mx-auto mt-20"><div class="card">
+    <a href="#/login" class="text-sm text-gray-500 hover:text-primary mb-4 inline-block">← กลับ</a>
+    <h2 class="text-xl font-bold mb-2">ลืมรหัสผ่าน</h2>
+    <p class="text-sm text-gray-500 mb-6">กรอกอีเมลเพื่อรับลิงก์ตั้งรหัสผ่านใหม่</p>
+    <form onsubmit="event.preventDefault();toast('ส่งอีเมลสำเร็จ','success');navigate('#/reset-email')">
+      <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">อีเมล <span class="text-red-500">*</span></label><input type="email" class="input" required placeholder="your@hotel.com"></div>
+      <button type="submit" class="btn btn-primary w-full">ส่งลิงก์รีเซ็ตรหัสผ่าน</button>
+    </form>
+  </div></div>`));
+}
+function pageResetEmail() {
+  render(publicLayout(`<div class="max-w-md mx-auto mt-20 text-center card">
+    <div class="text-5xl mb-4">📧</div>
+    <h2 class="text-xl font-bold mb-2">ตรวจสอบอีเมลของคุณ</h2>
+    <p class="text-gray-600 mb-4">เราส่งลิงก์รีเซ็ตรหัสผ่านไปที่อีเมลของคุณแล้ว</p>
+    <div class="bg-yellow-50 rounded-lg p-3 mb-6 text-sm text-yellow-800">ลิงก์จะหมดอายุใน 24 ชั่วโมง</div>
+    <div class="flex flex-col gap-3">
+      <a href="#/set-password" class="btn btn-primary">เปิดลิงก์จากอีเมล →</a>
+      <a href="#/login" class="btn btn-secondary">กลับเข้าสู่ระบบ</a>
+      <a href="#/forgot-password" class="text-sm text-primary hover:underline">ส่งอีเมลใหม่</a>
+    </div>
+  </div>`));
+}
+function pageSetPassword() {
+  render(publicLayout(`<div class="max-w-md mx-auto mt-20"><div class="card">
+    <h2 class="text-xl font-bold mb-2">ตั้งรหัสผ่านใหม่</h2>
+    <p class="text-sm text-gray-500 mb-6">กรอกรหัสผ่านใหม่สำหรับบัญชีของคุณ</p>
+    <form onsubmit="event.preventDefault();toast('เปลี่ยนรหัสผ่านสำเร็จ','success');navigate('#/login')">
+      <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">รหัสผ่านใหม่ <span class="text-red-500">*</span></label><input type="password" class="input" required minlength="4"></div>
+      <div class="mb-6"><label class="text-sm font-medium text-gray-700 mb-1 block">ยืนยันรหัสผ่าน <span class="text-red-500">*</span></label><input type="password" class="input" required minlength="4"></div>
+      <button type="submit" class="btn btn-primary w-full">บันทึกรหัสผ่านใหม่</button>
+    </form>
+  </div></div>`));
+}
+
+// --- Hotel Dashboard ---
+function pageDashboard() {
+  const db = getDB();
+  const s = getSession();
+  const myIncidents = db.incidents.filter(i => i.createdBy === s.userId);
+  const recentIncidents = db.incidents.slice(0, 3);
+  render(hotelLayout(`
+    <h1 class="text-xl font-bold mb-6">แดชบอร์ด</h1>
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      <a href="#/search" class="stat-card"><div class="text-2xl font-bold text-navy">${db.offenders.length}</div><div class="text-sm text-gray-500 mt-1">บุคคลในระบบ</div></a>
+      <a href="#/my-incidents" class="stat-card"><div class="text-2xl font-bold text-navy">${myIncidents.length}</div><div class="text-sm text-gray-500 mt-1">เหตุการณ์ของฉัน</div></a>
+      <a href="#/my-incidents" class="stat-card"><div class="text-2xl font-bold text-warning">${myIncidents.filter(i=>i.blacklistStatus==='reviewing').length}</div><div class="text-sm text-gray-500 mt-1">รอการตรวจสอบ</div></a>
+    </div>
+    <div class="grid grid-cols-2 gap-6">
+      <div class="card"><h3 class="font-semibold mb-3">🔍 ค้นหาผู้ก่อเหตุ</h3><p class="text-sm text-gray-500 mb-4">ตรวจสอบประวัติบุคคลจากฐานข้อมูลกลาง</p><a href="#/search" class="btn btn-primary text-sm !py-2">ค้นหาเลย</a></div>
+      <div class="card"><h3 class="font-semibold mb-3">＋ รายงานเหตุการณ์</h3><p class="text-sm text-gray-500 mb-4">แจ้งเหตุการณ์ใหม่พร้อมรายละเอียดและหลักฐาน</p><a href="#/create-incident" class="btn btn-primary text-sm !py-2">รายงานเหตุการณ์</a></div>
+    </div>
+    <div class="card mt-6">
+      <h3 class="font-semibold mb-4">เหตุการณ์ล่าสุดในระบบ</h3>
+      <table><thead><tr><th>ผู้ก่อเหตุ</th><th>ประเภท</th><th>โรงแรม</th><th>วันที่</th><th>สถานะ</th><th></th></tr></thead><tbody>
+      ${recentIncidents.map(inc=>{
+        const off = db.offenders.find(o=>o.id===inc.offenderId);
+        const hotel = db.hotels.find(h=>h.id===inc.hotelId);
+        return `<tr><td>${off?.name||'-'}</td><td>${inc.type}</td><td>${hotel?.name||'-'}</td><td>${inc.date}</td><td>${badgeStatus(inc.blacklistStatus)}</td><td><a href="#/incident/${inc.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>
+  `,'dashboard'));
+}
+
+// --- Search ---
+function pageSearch() {
+  const db = getDB();
+  render(hotelLayout(`
+    <h1 class="text-xl font-bold mb-6">ค้นหาผู้ก่อเหตุ</h1>
+    <div class="flex gap-3 mb-6">
+      <input class="input flex-1" id="search-input" placeholder="🔍  ค้นหาด้วยชื่อ, เลขบัตรประชาชน, เลขพาสปอร์ต..." autofocus>
+      <button onclick="doSearch()" class="btn btn-primary">ค้นหา</button>
+    </div>
+    <div id="search-results"></div>
+  `,'search'));
+  document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+}
+
+function doSearch() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const db = getDB();
+  let results = db.offenders;
+  if (q) {
+    results = db.offenders.filter(o =>
+      o.name.toLowerCase().includes(q) || o.nameTh.includes(q) ||
+      o.idCard.replace(/-/g,'').includes(q.replace(/-/g,'')) ||
+      o.passport.toLowerCase().includes(q)
+    );
+  }
+  const container = document.getElementById('search-results');
+  if (!results.length) {
+    container.innerHTML = `<div class="text-center py-16"><div class="text-5xl mb-4">🔍</div><h3 class="font-semibold text-gray-600 mb-2">ไม่พบข้อมูลบุคคล</h3><p class="text-sm text-gray-400 mb-6">ลองค้นหาด้วยคำอื่น</p><a href="#/create-incident" class="btn btn-primary">＋ รายงานเหตุการณ์ใหม่</a></div>`;
+    return;
+  }
+  container.innerHTML = results.map(o => {
+    const incCount = db.incidents.filter(i=>i.offenderId===o.id).length;
+    const blacklisted = db.incidents.some(i=>i.offenderId===o.id && i.blacklistStatus==='blacklisted');
+    return `<div class="card mb-3 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-xl">👤</div>
+        <div>
+          <div class="font-semibold">${o.name} <span class="text-gray-400 text-sm">(${o.nameTh})</span></div>
+          <div class="text-sm text-gray-500">บัตร: ${o.idCard}${o.passport?' | พาสปอร์ต: '+o.passport:''}</div>
+          <div class="flex gap-2 mt-1">${blacklisted?'<span class="badge badge-blacklisted text-xs">อยู่ในบัญชีดำ</span>':''}<span class="text-xs text-gray-400">${incCount} เหตุการณ์</span></div>
+        </div>
+      </div>
+      <a href="#/offender/${o.id}" class="btn btn-secondary text-sm !py-2">ดูรายละเอียด</a>
+    </div>`;
+  }).join('');
+}
+
+// --- Offender Detail ---
+function pageOffenderDetail(offId) {
+  const db = getDB();
+  const o = db.offenders.find(x=>x.id===offId);
+  if (!o) { navigate('#/search'); return; }
+  const incidents = db.incidents.filter(i=>i.offenderId===offId);
+  render(hotelLayout(`
+    <div class="flex items-center gap-2 text-sm text-gray-500 mb-4"><a href="#/search" class="hover:text-primary">ค้นหาผู้ก่อเหตุ</a> / ${o.name}</div>
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-2">
+        <div class="card mb-6">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-3xl">👤</div>
+            <div><h2 class="text-xl font-bold">${o.name}</h2><div class="text-gray-500">${o.nameTh}</div></div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div><span class="text-gray-500">เลขบัตรประชาชน</span><div class="font-medium mt-1">${o.idCard}</div></div>
+            ${o.passport?`<div><span class="text-gray-500">พาสปอร์ต</span><div class="font-medium mt-1">${o.passport}</div></div>`:''}
+            <div><span class="text-gray-500">สัญชาติ</span><div class="font-medium mt-1">${o.nationality}</div></div>
+            <div><span class="text-gray-500">วันเกิด</span><div class="font-medium mt-1">${o.dob}</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="font-semibold mb-4">ประวัติเหตุการณ์ (${incidents.length})</h3>
+          <table><thead><tr><th>วันที่</th><th>ประเภท</th><th>โรงแรม</th><th>สถานะ</th><th></th></tr></thead><tbody>
+          ${incidents.map(i=>{
+            const hotel=db.hotels.find(h=>h.id===i.hotelId);
+            return `<tr><td>${i.date}</td><td>${i.type}</td><td>${hotel?.name||'-'}</td><td>${badgeStatus(i.blacklistStatus)}</td><td><a href="#/incident/${i.id}" class="text-primary text-sm">ดูรายละเอียด</a></td></tr>`;
+          }).join('')}
+          </tbody></table>
+        </div>
+      </div>
+      <div>
+        <div class="card"><h3 class="font-semibold mb-3">สรุป</h3>
+          <div class="text-3xl font-bold ${incidents.some(i=>i.blacklistStatus==='blacklisted')?'text-red-600':'text-yellow-600'} mb-2">${incidents.some(i=>i.blacklistStatus==='blacklisted')?'⚠️ อยู่ในบัญชีดำ':'รอการตรวจสอบ'}</div>
+          <div class="text-sm text-gray-500">${incidents.length} เหตุการณ์ทั้งหมด</div>
+        </div>
+        <a href="#/create-incident/${offId}" class="btn btn-primary w-full mt-4 text-center block">＋ รายงานเหตุการณ์</a>
+        <a href="#/search" class="btn btn-secondary w-full mt-2 text-center block">← กลับ</a>
+      </div>
+    </div>
+  `,'search'));
+}
+
+// --- Create Incident ---
+function pageCreateIncident(prefillOffId) {
+  const db = getDB();
+  render(hotelLayout(`
+    <h1 class="text-xl font-bold mb-6">รายงานเหตุการณ์ใหม่</h1>
+    <div class="card max-w-2xl">
+      <form onsubmit="handleCreateIncident(event)">
+        <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">ผู้ก่อเหตุ <span class="text-red-500">*</span></label>
+          <select class="input" id="inc-offender" required>
+            <option value="">— เลือกผู้ก่อเหตุ —</option>
+            ${db.offenders.map(o=>`<option value="${o.id}" ${o.id===prefillOffId?'selected':''}>${o.name} (${o.idCard})</option>`).join('')}
+            <option value="__new">+ เพิ่มผู้ก่อเหตุใหม่</option>
+          </select>
+        </div>
+        <div id="new-offender-fields" class="hidden mb-4 bg-gray-50 rounded-lg p-4">
+          <h4 class="font-medium text-sm mb-3">ข้อมูลผู้ก่อเหตุใหม่</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-xs text-gray-600">ชื่อ (EN) *</label><input class="input !text-sm" id="new-off-name" placeholder="Full Name"></div>
+            <div><label class="text-xs text-gray-600">ชื่อ (TH)</label><input class="input !text-sm" id="new-off-nameth" placeholder="ชื่อ-สกุล"></div>
+            <div><label class="text-xs text-gray-600">เลขบัตรประชาชน *</label><input class="input !text-sm" id="new-off-id" placeholder="X-XXXX-XXXXX-XX-X"></div>
+            <div><label class="text-xs text-gray-600">สัญชาติ</label><input class="input !text-sm" id="new-off-nat" value="ไทย"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div><label class="text-sm font-medium text-gray-700 mb-1 block">ประเภทเหตุการณ์ <span class="text-red-500">*</span></label>
+            <select class="input" id="inc-type" required><option value="">— เลือก —</option><option>ขโมยของในห้อง</option><option>การฉ้อโกง</option><option>พฤติกรรมไม่เหมาะสม</option><option>ทำลายทรัพย์สิน</option><option>อื่นๆ</option></select>
+          </div>
+          <div><label class="text-sm font-medium text-gray-700 mb-1 block">วันที่เกิดเหตุ <span class="text-red-500">*</span></label><input type="date" class="input" id="inc-date" required></div>
+        </div>
+        <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">เวลา <span class="text-red-500">*</span></label><input type="time" class="input" id="inc-time" required></div>
+        <div class="mb-4"><label class="text-sm font-medium text-gray-700 mb-1 block">รายละเอียด <span class="text-red-500">*</span></label><textarea class="input" id="inc-desc" rows="4" required placeholder="อธิบายเหตุการณ์ที่เกิดขึ้น..."></textarea></div>
+        <div class="mb-6"><label class="text-sm font-medium text-gray-700 mb-1 block">ไฟล์แนบ</label><input type="file" class="input !py-2" multiple><p class="text-xs text-gray-400 mt-1">รูปภาพ, วิดีโอ, เอกสาร</p></div>
+        <div class="flex gap-3">
+          <button type="submit" class="btn btn-primary flex-1">ส่งรายงานเหตุการณ์</button>
+          <a href="#/search" class="btn btn-secondary flex-1 text-center">ยกเลิก</a>
+        </div>
+      </form>
+    </div>
+  `,'create-incident'));
+  document.getElementById('inc-offender').addEventListener('change', e => {
+    document.getElementById('new-offender-fields').classList.toggle('hidden', e.target.value !== '__new');
+  });
+}
+
+function handleCreateIncident(e) {
+  e.preventDefault();
+  const db = getDB();
+  const s = getSession();
+  let offId = document.getElementById('inc-offender').value;
+  if (offId === '__new') {
+    const name = document.getElementById('new-off-name').value;
+    const idCard = document.getElementById('new-off-id').value;
+    if (!name || !idCard) { toast('กรุณากรอกข้อมูลผู้ก่อเหตุ','error'); return; }
+    offId = 'o' + Date.now();
+    db.offenders.push({id:offId,name:name,nameTh:document.getElementById('new-off-nameth').value||name,idCard:idCard,passport:'',nationality:document.getElementById('new-off-nat').value||'ไทย',dob:'',photo:null});
+  }
+  const inc = {
+    id:'inc'+Date.now(),
+    type:document.getElementById('inc-type').value,
+    date:document.getElementById('inc-date').value,
+    time:document.getElementById('inc-time').value,
+    hotelId:s.hotelId,offenderId:offId,
+    description:document.getElementById('inc-desc').value,
+    attachments:[],blacklistStatus:'reviewing',adminNote:'',createdBy:s.userId
+  };
+  db.incidents.push(inc);
+  saveDB(db);
+  toast('ส่งรายงานเหตุการณ์สำเร็จ','success');
+  navigate('#/my-incidents');
+}
+
+// --- My Incidents ---
+function pageMyIncidents() {
+  const db = getDB();
+  const s = getSession();
+  const mine = db.incidents.filter(i=>i.createdBy===s.userId);
+  render(hotelLayout(`
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-xl font-bold">เหตุการณ์ของฉัน (${mine.length})</h1>
+      <a href="#/create-incident" class="btn btn-primary text-sm !py-2">+ รายงานเหตุการณ์</a>
+    </div>
+    <div class="card">
+      <table><thead><tr><th>#</th><th>ผู้ก่อเหตุ</th><th>ประเภท</th><th>วันที่</th><th>สถานะบัญชีดำ</th><th></th></tr></thead><tbody>
+      ${mine.length?mine.map((inc,i)=>{
+        const off=db.offenders.find(o=>o.id===inc.offenderId);
+        return `<tr><td>${i+1}</td><td>${off?.name||'-'}</td><td>${inc.type}</td><td>${inc.date}</td><td>${badgeStatus(inc.blacklistStatus)}</td><td><a href="#/incident/${inc.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`;
+      }).join(''):'<tr><td colspan="6" class="text-center py-8 text-gray-400">ยังไม่มีเหตุการณ์</td></tr>'}
+      </tbody></table>
+    </div>
+  `,'my-incidents'));
+}
+
+// --- Incident Detail ---
+function pageIncidentDetail(incId) {
+  const db = getDB();
+  const inc = db.incidents.find(x=>x.id===incId);
+  if (!inc) { navigate('#/my-incidents'); return; }
+  const off = db.offenders.find(o=>o.id===inc.offenderId);
+  const hotel = db.hotels.find(h=>h.id===inc.hotelId);
+  const isAdmin = getSession()?.role === 'admin';
+  const layout = isAdmin ? adminLayout : hotelLayout;
+  const backLink = isAdmin ? '#/admin-incidents' : '#/my-incidents';
+  const activePage = isAdmin ? 'admin-incidents' : 'my-incidents';
+
+  render(layout(`
+    <div class="text-sm text-gray-500 mb-4"><a href="${backLink}" class="hover:text-primary">${isAdmin?'เหตุการณ์':'เหตุการณ์ของฉัน'}</a> / ${inc.id.toUpperCase()}</div>
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-2">
+        <div class="card mb-6">
+          <h3 class="font-semibold mb-3">ข้อมูลเหตุการณ์</h3><hr class="mb-4">
+          <div class="grid grid-cols-2 gap-y-4 text-sm">
+            <div><span class="text-gray-500">ประเภท</span><div class="font-medium mt-1">${inc.type}</div></div>
+            <div><span class="text-gray-500">วันที่</span><div class="font-medium mt-1">${inc.date}</div></div>
+            <div><span class="text-gray-500">เวลา</span><div class="font-medium mt-1">${inc.time}</div></div>
+            <div><span class="text-gray-500">โรงแรม</span><div class="font-medium mt-1">${hotel?.name||'-'}</div></div>
+          </div>
+          <div class="mt-4 text-sm"><span class="text-gray-500">รายละเอียด</span><div class="font-medium mt-1">${inc.description}</div></div>
+          <hr class="my-4"><h4 class="font-semibold text-sm mb-3">ไฟล์แนบ</h4>
+          <div class="flex gap-3">${inc.attachments.length?inc.attachments.map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
+        </div>
+      </div>
+      <div>
+        <div class="card mb-4"><h3 class="font-semibold mb-3">ข้อมูลผู้ก่อเหตุ</h3><hr class="mb-3">
+          ${off?`<div class="text-sm space-y-2"><div><span class="text-gray-500">ชื่อ-นามสกุล</span><div class="font-medium">${off.name}</div></div><div><span class="text-gray-500">เลขบัตรประชาชน</span><div class="font-medium">${off.idCard}</div></div><div><span class="text-gray-500">สัญชาติ</span><div class="font-medium">${off.nationality}</div></div><div><span class="text-gray-500">วันเกิด</span><div class="font-medium">${off.dob||'-'}</div></div></div>`:'<span class="text-gray-400">-</span>'}
+        </div>
+        <div class="card"><h3 class="font-semibold mb-3">สถานะบัญชีดำ</h3><hr class="mb-3">
+          <div>${badgeStatus(inc.blacklistStatus)}</div>
+          ${inc.adminNote?`<div class="mt-2 text-xs text-gray-500">หมายเหตุ: ${inc.adminNote}</div>`:''}
+        </div>
+      </div>
+    </div>
+  `, activePage));
+}
+
+// ===================== ADMIN PAGES =====================
+
+function pageAdminDashboard() {
+  const db = getDB();
+  const pendingHotels = db.hotels.filter(h=>h.status==='pending');
+  const recentInc = db.incidents.slice(0, 5);
+  render(adminLayout(`
+    <h1 class="text-xl font-bold mb-6">แดชบอร์ดผู้ดูแลระบบ</h1>
+    <div class="grid grid-cols-4 gap-4 mb-8">
+      <a href="#/admin-members" class="stat-card"><div class="text-2xl font-bold">${db.hotels.length}</div><div class="text-sm text-gray-500">สมาชิกทั้งหมด</div></a>
+      <a href="#/admin-members" class="stat-card"><div class="text-2xl font-bold text-warning">${pendingHotels.length}</div><div class="text-sm text-gray-500">รอการอนุมัติ</div></a>
+      <a href="#/admin-incidents" class="stat-card"><div class="text-2xl font-bold">${db.incidents.length}</div><div class="text-sm text-gray-500">เหตุการณ์ทั้งหมด</div></a>
+      <a href="#/admin-incidents" class="stat-card"><div class="text-2xl font-bold text-danger">${db.incidents.filter(i=>i.blacklistStatus==='reviewing').length}</div><div class="text-sm text-gray-500">รอดำเนินการ</div></a>
+    </div>
+    <div class="grid grid-cols-2 gap-6">
+      <div class="card"><h3 class="font-semibold mb-4">สมาชิกรอการอนุมัติ</h3>
+        <table><thead><tr><th>ชื่อโรงแรม</th><th>วันที่สมัคร</th><th></th></tr></thead><tbody>
+        ${pendingHotels.length?pendingHotels.map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
+        </tbody></table>
+      </div>
+      <div class="card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
+        <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>สถานะ</th></tr></thead><tbody>
+        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td>${badgeStatus(inc.blacklistStatus)}</td></tr>`}).join('')}
+        </tbody></table>
+      </div>
+    </div>
+  `,'admin-dashboard'));
+}
+
+function pageAdminMembers() {
+  const db = getDB();
+  render(adminLayout(`
+    <div class="flex justify-between items-center mb-6"><h1 class="text-xl font-bold">สมาชิก</h1></div>
+    <div class="card">
+      <div class="flex gap-3 mb-4">
+        <input class="input flex-1" placeholder="🔍  ค้นหาชื่อโรงแรม..." id="member-search" oninput="filterMembers()">
+      </div>
+      <table><thead><tr><th>#</th><th>ชื่อโรงแรม</th><th>ผู้ติดต่อ</th><th>โทรศัพท์</th><th>วันที่สมัคร</th><th>สถานะ</th><th></th></tr></thead><tbody id="members-tbody">
+      ${db.hotels.map((h,i)=>`<tr data-name="${h.name}"><td>${i+1}</td><td>${h.name}</td><td>${h.contact}</td><td>${h.phone}</td><td>${h.registeredAt}</td><td>${badgeStatus(h.status)}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+  `,'admin-members'));
+}
+
+function filterMembers() {
+  const q = document.getElementById('member-search').value.toLowerCase();
+  document.querySelectorAll('#members-tbody tr').forEach(tr => {
+    tr.style.display = tr.dataset.name.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function pageAdminMemberDetail(hotelId) {
+  const db = getDB();
+  const h = db.hotels.find(x=>x.id===hotelId);
+  if (!h) { navigate('#/admin-members'); return; }
+  render(adminLayout(`
+    <div class="text-sm text-gray-500 mb-4"><a href="#/admin-members" class="hover:text-primary">สมาชิก</a> / ${h.name}</div>
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-2 card">
+        <h3 class="font-semibold mb-3">ข้อมูลโรงแรม</h3><hr class="mb-4">
+        <div class="grid grid-cols-2 gap-y-4 text-sm">
+          <div><span class="text-gray-500">ชื่อโรงแรม</span><div class="font-medium mt-1">${h.name}</div></div>
+          <div><span class="text-gray-500">ที่อยู่</span><div class="font-medium mt-1">${h.address}</div></div>
+          <div><span class="text-gray-500">ผู้ติดต่อ</span><div class="font-medium mt-1">${h.contact}</div></div>
+          <div><span class="text-gray-500">โทรศัพท์</span><div class="font-medium mt-1">${h.phone}</div></div>
+          <div><span class="text-gray-500">อีเมล</span><div class="font-medium mt-1">${h.email}</div></div>
+          <div><span class="text-gray-500">ใบอนุญาต</span><div class="font-medium mt-1">${h.license}</div></div>
+        </div>
+        <h4 class="font-semibold text-sm mt-6 mb-3">เอกสารที่ส่งมา</h4><hr class="mb-3">
+        ${h.documents.map(d=>`<div class="text-sm text-primary mb-1">📄 ${d}</div>`).join('')}
+      </div>
+      <div>
+        <div class="card mb-4"><h3 class="font-semibold mb-3">สถานะ</h3><hr class="mb-3">
+          <div>${badgeStatus(h.status)}</div>
+          <div class="text-xs text-gray-500 mt-2">สมัคร: ${h.registeredAt}</div>
+        </div>
+        <div class="card">
+          <h3 class="font-semibold mb-3">การดำเนินการ</h3><hr class="mb-3">
+          <textarea class="input mb-3 text-sm" placeholder="เพิ่มหมายเหตุ (ไม่บังคับ)" id="admin-note-${h.id}" rows="2"></textarea>
+          <button onclick="adminApprove('${h.id}')" class="btn btn-success w-full mb-2">อนุมัติสมาชิก</button>
+          <button onclick="adminReject('${h.id}')" class="btn btn-danger w-full">ปฏิเสธ</button>
+        </div>
+      </div>
+    </div>
+  `,'admin-members'));
+}
+
+function adminApprove(hid) {
+  const db=getDB(); const h=db.hotels.find(x=>x.id===hid);
+  if(h){h.status='active';saveDB(db);toast('อนุมัติสมาชิกสำเร็จ','success');navigate('#/admin-members');}
+}
+function adminReject(hid) {
+  const db=getDB(); const h=db.hotels.find(x=>x.id===hid);
+  if(h){h.status='rejected';saveDB(db);toast('ปฏิเสธสมาชิกแล้ว','info');navigate('#/admin-members');}
+}
+
+function pageAdminIncidents() {
+  const db = getDB();
+  render(adminLayout(`
+    <div class="flex justify-between items-center mb-6"><h1 class="text-xl font-bold">เหตุการณ์</h1>
+      <span class="badge badge-reviewing">${db.incidents.filter(i=>i.blacklistStatus==='reviewing').length} รายการรอตรวจสอบ</span>
+    </div>
+    <div class="card">
+      <div class="flex gap-3 mb-4">
+        <input class="input flex-1" placeholder="🔍  ค้นหาโรงแรมหรือผู้ก่อเหตุ..." id="ainc-search" oninput="filterAdminIncidents()">
+      </div>
+      <table><thead><tr><th>#</th><th>ผู้ก่อเหตุ</th><th>ประเภท</th><th>รายงานโดย</th><th>วันที่</th><th>บัญชีดำ</th><th></th></tr></thead><tbody id="ainc-tbody">
+      ${db.incidents.map((inc,i)=>{
+        const off=db.offenders.find(o=>o.id===inc.offenderId);
+        const hotel=db.hotels.find(h=>h.id===inc.hotelId);
+        return `<tr data-search="${off?.name||''} ${hotel?.name||''}"><td>${i+1}</td><td>${off?.name||'-'}</td><td>${inc.type}</td><td>${hotel?.name||'-'}</td><td>${inc.date}</td><td>${badgeStatus(inc.blacklistStatus)}</td><td><a href="#/admin-incident/${inc.id}" class="text-primary text-sm hover:underline">ตรวจสอบ</a></td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>
+  `,'admin-incidents'));
+}
+
+function filterAdminIncidents() {
+  const q = document.getElementById('ainc-search').value.toLowerCase();
+  document.querySelectorAll('#ainc-tbody tr').forEach(tr => {
+    tr.style.display = (tr.dataset.search||'').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function pageAdminIncidentDetail(incId) {
+  const db=getDB();
+  const inc=db.incidents.find(x=>x.id===incId);
+  if(!inc){navigate('#/admin-incidents');return;}
+  const off=db.offenders.find(o=>o.id===inc.offenderId);
+  const hotel=db.hotels.find(h=>h.id===inc.hotelId);
+  render(adminLayout(`
+    <div class="text-sm text-gray-500 mb-4"><a href="#/admin-incidents" class="hover:text-primary">เหตุการณ์</a> / ${inc.id.toUpperCase()}</div>
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-2">
+        <div class="card mb-6">
+          <h3 class="font-semibold mb-3">ข้อมูลเหตุการณ์</h3><hr class="mb-4">
+          <div class="grid grid-cols-2 gap-y-4 text-sm">
+            <div><span class="text-gray-500">ประเภท</span><div class="font-medium mt-1">${inc.type}</div></div>
+            <div><span class="text-gray-500">วันที่</span><div class="font-medium mt-1">${inc.date}</div></div>
+            <div><span class="text-gray-500">เวลา</span><div class="font-medium mt-1">${inc.time}</div></div>
+            <div><span class="text-gray-500">โรงแรม</span><div class="font-medium mt-1">${hotel?.name||'-'}</div></div>
+          </div>
+          <div class="mt-4 text-sm"><span class="text-gray-500">รายละเอียด</span><div class="font-medium mt-1">${inc.description}</div></div>
+          <hr class="my-4"><h4 class="font-semibold text-sm mb-3">ไฟล์แนบ</h4>
+          <div class="flex gap-3">${inc.attachments.length?inc.attachments.map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
+        </div>
+      </div>
+      <div>
+        <div class="card mb-4"><h3 class="font-semibold mb-3">ข้อมูลผู้ก่อเหตุ</h3><hr class="mb-3">
+          ${off?`<div class="text-sm space-y-2"><div><span class="text-gray-500">ชื่อ-นามสกุล</span><div class="font-medium">${off.name}</div></div><div><span class="text-gray-500">เลขบัตร</span><div class="font-medium">${off.idCard}</div></div><div><span class="text-gray-500">สัญชาติ</span><div class="font-medium">${off.nationality}</div></div></div>`:''}
+        </div>
+        <div class="card mb-4"><h3 class="font-semibold mb-3">สถานะปัจจุบัน</h3><hr class="mb-3">
+          ${badgeStatus(inc.blacklistStatus)}
+          <div class="text-xs text-gray-400 mt-2">${db.incidents.filter(i=>i.offenderId===inc.offenderId&&i.blacklistStatus==='blacklisted').length} เหตุการณ์ที่ยืนยันก่อนหน้านี้</div>
+        </div>
+        <div class="card">
+          <h3 class="font-semibold mb-3">การตัดสินใจ</h3><hr class="mb-3">
+          <textarea class="input mb-3 text-sm" id="bl-note-${inc.id}" rows="2" placeholder="หมายเหตุผู้ดูแลระบบ (ไม่บังคับ)"></textarea>
+          <hr class="my-3"><p class="text-xs text-gray-500 mb-3">การดำเนินการบัญชีดำ</p>
+          <button onclick="adminBlacklist('${inc.id}')" class="btn btn-danger w-full mb-2">เพิ่มบุคคลนี้ในบัญชีดำ</button>
+          <button onclick="adminDismiss('${inc.id}')" class="btn btn-secondary w-full">ยกเว้น (ไม่ดำเนินการ)</button>
+          <p class="text-xs text-gray-400 mt-3">บัญชีดำจะมีผลทันทีกับทุกโรงแรมในระบบ</p>
+        </div>
+      </div>
+    </div>
+  `,'admin-incidents'));
+}
+
+function adminBlacklist(incId) {
+  const db=getDB();const inc=db.incidents.find(x=>x.id===incId);
+  if(inc){inc.blacklistStatus='blacklisted';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';saveDB(db);toast('เพิ่มในบัญชีดำแล้ว','success');navigate('#/admin-incidents');}
+}
+function adminDismiss(incId) {
+  const db=getDB();const inc=db.incidents.find(x=>x.id===incId);
+  if(inc){inc.blacklistStatus='dismissed';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';saveDB(db);toast('ยกเว้นเรียบร้อย','info');navigate('#/admin-incidents');}
+}
+
+// ===================== INIT =====================
+getDB(); // ensure seed data
+router();
+</script>
+</body>
+</html>
