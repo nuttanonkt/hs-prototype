@@ -889,7 +889,7 @@ function pageIncidentDetail(incId) {
           </div>
           <div class="mt-4 text-sm"><span class="text-gray-500">รายละเอียด</span><div class="font-medium mt-1">${inc.description}</div></div>
           <hr class="my-4"><h4 class="font-semibold text-sm mb-3">ไฟล์แนบ</h4>
-          <div class="flex gap-3">${inc.attachments.length?inc.attachments.map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
+          <div class="flex gap-3">${(inc.attachments||[]).length?(inc.attachments||[]).map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match?.(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
         </div>
       </div>
       <div>
@@ -974,7 +974,7 @@ function pageAdminMemberDetail(hotelId) {
           <div><span class="text-gray-500">ใบอนุญาต</span><div class="font-medium mt-1">${h.license}</div></div>
         </div>
         <h4 class="font-semibold text-sm mt-6 mb-3">เอกสารที่ส่งมา</h4><hr class="mb-3">
-        ${h.documents.map(d=>`<div class="text-sm text-primary mb-1">📄 ${d}</div>`).join('')}
+        ${(h.documents||[]).map(d=>`<div class="text-sm text-primary mb-1">📄 ${d}</div>`).join('')||'<span class="text-sm text-gray-400">ไม่มีเอกสาร</span>'}
       </div>
       <div>
         <div class="card mb-4"><h3 class="font-semibold mb-3">สถานะ</h3><hr class="mb-3">
@@ -1049,7 +1049,7 @@ function pageAdminIncidentDetail(incId) {
           </div>
           <div class="mt-4 text-sm"><span class="text-gray-500">รายละเอียด</span><div class="font-medium mt-1">${inc.description}</div></div>
           <hr class="my-4"><h4 class="font-semibold text-sm mb-3">ไฟล์แนบ</h4>
-          <div class="flex gap-3">${inc.attachments.length?inc.attachments.map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
+          <div class="flex gap-3">${(inc.attachments||[]).length?(inc.attachments||[]).map(f=>`<div class="border rounded-lg p-3 w-48"><div class="bg-gray-100 rounded h-20 flex items-center justify-center text-2xl mb-2">${f.match?.(/\.(jpg|png)$/)?'🖼':'📄'}</div><div class="text-xs text-gray-500 truncate">${f}</div></div>`).join(''):'<span class="text-sm text-gray-400">ไม่มีไฟล์แนบ</span>'}</div>
         </div>
       </div>
       <div>
