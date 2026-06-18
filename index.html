@@ -1000,10 +1000,26 @@ function pageAdminDashboard() {
         ${pendingHotels.length?sortByDate(pendingHotels).map(h=>`<tr><td>${h.name}</td><td>${h.registeredAt}</td><td><a href="#/admin-member/${h.id}" class="text-primary text-sm">ตรวจสอบ</a></td></tr>`).join(''):'<tr><td colspan="3" class="text-center py-4 text-gray-400">ไม่มีรายการ</td></tr>'}
         </tbody></table>
       </div>
-      <div class="col-span-3 card"><h3 class="font-semibold mb-4">เหตุการณ์ล่าสุด</h3>
-        <table><thead><tr><th>โรงแรม</th><th>ประเภท</th><th>วันที่/เวลา</th><th>สถานะ</th></tr></thead><tbody>
-        ${recentInc.map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr><td>${h?.name||'-'}</td><td>${inc.type}</td><td class="whitespace-nowrap">${inc.date} ${inc.time||''}</td><td><span class="whitespace-nowrap">${badgeStatus(inc.blacklistStatus)}</span></td></tr>`}).join('')}
+      <div class="col-span-3 card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold">เหตุการณ์ล่าสุด</h3>
+          <div class="flex gap-2 items-center">
+            <input type="date" class="input !py-1.5 !px-3 !text-xs !w-auto" id="dash-date-from" onchange="filterDashIncidents()" title="จากวันที่">
+            <span class="text-gray-400 text-xs">ถึง</span>
+            <input type="date" class="input !py-1.5 !px-3 !text-xs !w-auto" id="dash-date-to" onchange="filterDashIncidents()" title="ถึงวันที่">
+            <select class="input !py-1.5 !px-3 !text-xs !w-auto" id="dash-status-filter" onchange="filterDashIncidents()">
+              <option value="">สถานะทั้งหมด</option>
+              <option value="reviewing">รอการตรวจสอบ</option>
+              <option value="blacklisted">อยู่ในบัญชีดำ</option>
+              <option value="dismissed">ยกเว้น</option>
+            </select>
+          </div>
+        </div>
+        <div style="max-height:320px;overflow-y:auto">
+        <table><thead class="sticky top-0"><tr><th>โรงแรม</th><th>ประเภท</th><th>วันที่/เวลา</th><th>สถานะ</th></tr></thead><tbody id="dash-inc-tbody">
+        ${sortByDate(db.incidents).map(inc=>{const h=db.hotels.find(x=>x.id===inc.hotelId);return `<tr data-date="${inc.date}" data-status="${inc.blacklistStatus}"><td>${h?.name||'-'}</td><td>${inc.type}</td><td class="whitespace-nowrap">${inc.date} ${inc.time||''}</td><td><span class="whitespace-nowrap">${badgeStatus(inc.blacklistStatus)}</span></td></tr>`}).join('')}
         </tbody></table>
+        </div>
       </div>
     </div>
   `,'admin-dashboard'));
@@ -1113,6 +1129,21 @@ function filterAdminIncidents() {
   const q = document.getElementById('ainc-search').value.toLowerCase();
   document.querySelectorAll('#ainc-tbody tr').forEach(tr => {
     tr.style.display = (tr.dataset.search||'').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function filterDashIncidents() {
+  const from = document.getElementById('dash-date-from')?.value || '';
+  const to = document.getElementById('dash-date-to')?.value || '';
+  const status = document.getElementById('dash-status-filter')?.value || '';
+  document.querySelectorAll('#dash-inc-tbody tr').forEach(tr => {
+    const d = tr.dataset.date || '';
+    const s = tr.dataset.status || '';
+    let show = true;
+    if (from && d < from) show = false;
+    if (to && d > to) show = false;
+    if (status && s !== status) show = false;
+    tr.style.display = show ? '' : 'none';
   });
 }
 
