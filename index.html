@@ -59,8 +59,15 @@ function getDB() {
 
 function saveDB(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
-  pushToFirebase(db);
+  pushPromise = pushToFirebase(db);
 }
+
+async function saveDBAndWait(db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+  await pushToFirebase(db);
+}
+
+let pushPromise = Promise.resolve();
 
 async function pushToFirebase(db) {
   try {
@@ -70,32 +77,51 @@ async function pushToFirebase(db) {
   } catch(e) { console.log('Firebase push failed:', e); }
 }
 
-// Firebase converts arrays to objects with numeric keys — fix that
 function fixArrays(obj) {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(fixArrays);
-  // Check if object has only sequential numeric keys → convert to array
+  if (Array.isArray(obj)) return obj.map(fixArrays).filter(x=>x!==null);
   const keys = Object.keys(obj);
   const isNumeric = keys.length > 0 && keys.every((k,i) => String(i) === k);
-  if (isNumeric) return keys.map(k => fixArrays(obj[k]));
-  // Otherwise fix nested
+  if (isNumeric) return keys.map(k => fixArrays(obj[k])).filter(x=>x!==null);
   const fixed = {};
   for (const k of keys) fixed[k] = fixArrays(obj[k]);
   return fixed;
+}
+
+// Merge: union of arrays by ID — keeps both Firebase + local items
+function mergeArrays(fbArr, localArr) {
+  const map = new Map();
+  for (const item of (fbArr||[])) { if(item?.id) map.set(item.id, item); }
+  for (const item of (localArr||[])) { if(item?.id) map.set(item.id, item); } // local wins for same ID
+  return [...map.values()];
+}
+
+function mergeDB(fbData, localData) {
+  return {
+    users: mergeArrays(fbData.users, localData.users),
+    hotels: mergeArrays(fbData.hotels, localData.hotels),
+    offenders: mergeArrays(fbData.offenders, localData.offenders),
+    incidents: mergeArrays(fbData.incidents, localData.incidents),
+    pendingHotels: fbData.pendingHotels || localData.pendingHotels || [],
+    session: localData.session,
+  };
 }
 
 async function pullFromFirebase() {
   if (syncing) return;
   syncing = true;
   try {
+    await pushPromise; // wait for pending push first
     const res = await fetch(FIREBASE_URL + '/data.json');
     let data = await res.json();
     if (data && data.users) {
       data = fixArrays(data);
       const local = getDB();
-      data.session = local.session;
-      localStorage.setItem(DB_KEY, JSON.stringify(data));
+      const merged = mergeDB(data, local);
+      localStorage.setItem(DB_KEY, JSON.stringify(merged));
+      // Push merged data back so Firebase has everything
+      pushPromise = pushToFirebase(merged);
     }
   } catch(e) { console.log('Firebase pull failed, using local:', e); }
   syncing = false;
@@ -108,8 +134,9 @@ async function initDB() {
     if (data && data.users) {
       data = fixArrays(data);
       const local = getDB();
-      data.session = local.session || null;
-      localStorage.setItem(DB_KEY, JSON.stringify(data));
+      const merged = mergeDB(data, local);
+      localStorage.setItem(DB_KEY, JSON.stringify(merged));
+      pushPromise = pushToFirebase(merged);
     } else {
       const db = seedData();
       await pushToFirebase(db);
@@ -465,7 +492,7 @@ function pageRegister() {
   `));
 }
 
-function handleRegister(e) {
+async function handleRegister(e) {
   e.preventDefault();
   const db = getDB();
   const hid = 'h' + Date.now();
@@ -484,7 +511,7 @@ function handleRegister(e) {
   const user = {id:uid,email:email,password:document.getElementById('reg-pass').value,role:'hotel',hotelId:hid,name:hotel.contact};
   db.hotels.push(hotel);
   db.users.push(user);
-  saveDB(db);
+  await saveDBAndWait(db);
   navigate('#/consent');
 }
 
@@ -781,7 +808,7 @@ function pageCreateIncident(prefillOffId) {
   });
 }
 
-function handleCreateIncident(e) {
+async function handleCreateIncident(e) {
   e.preventDefault();
   const db = getDB();
   const s = getSession();
@@ -803,7 +830,7 @@ function handleCreateIncident(e) {
     attachments:[],blacklistStatus:'reviewing',adminNote:'',createdBy:s.userId
   };
   db.incidents.push(inc);
-  saveDB(db);
+  await saveDBAndWait(db);
   toast('ส่งรายงานเหตุการณ์สำเร็จ','success');
   navigate('#/my-incidents');
 }
@@ -958,13 +985,13 @@ function pageAdminMemberDetail(hotelId) {
   `,'admin-members'));
 }
 
-function adminApprove(hid) {
+async function adminApprove(hid) {
   const db=getDB(); const h=db.hotels.find(x=>x.id===hid);
-  if(h){h.status='active';saveDB(db);toast('อนุมัติสมาชิกสำเร็จ','success');navigate('#/admin-members');}
+  if(h){h.status='active';await saveDBAndWait(db);toast('อนุมัติสมาชิกสำเร็จ','success');navigate('#/admin-members');}
 }
-function adminReject(hid) {
+async function adminReject(hid) {
   const db=getDB(); const h=db.hotels.find(x=>x.id===hid);
-  if(h){h.status='rejected';saveDB(db);toast('ปฏิเสธสมาชิกแล้ว','info');navigate('#/admin-members');}
+  if(h){h.status='rejected';await saveDBAndWait(db);toast('ปฏิเสธสมาชิกแล้ว','info');navigate('#/admin-members');}
 }
 
 function pageAdminIncidents() {
@@ -1039,13 +1066,13 @@ function pageAdminIncidentDetail(incId) {
   `,'admin-incidents'));
 }
 
-function adminBlacklist(incId) {
+async function adminBlacklist(incId) {
   const db=getDB();const inc=db.incidents.find(x=>x.id===incId);
-  if(inc){inc.blacklistStatus='blacklisted';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';saveDB(db);toast('เพิ่มในบัญชีดำแล้ว','success');navigate('#/admin-incidents');}
+  if(inc){inc.blacklistStatus='blacklisted';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';await saveDBAndWait(db);toast('เพิ่มในบัญชีดำแล้ว','success');navigate('#/admin-incidents');}
 }
-function adminDismiss(incId) {
+async function adminDismiss(incId) {
   const db=getDB();const inc=db.incidents.find(x=>x.id===incId);
-  if(inc){inc.blacklistStatus='dismissed';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';saveDB(db);toast('ยกเว้นเรียบร้อย','info');navigate('#/admin-incidents');}
+  if(inc){inc.blacklistStatus='dismissed';inc.adminNote=document.getElementById('bl-note-'+incId)?.value||'';await saveDBAndWait(db);toast('ยกเว้นเรียบร้อย','info');navigate('#/admin-incidents');}
 }
 
 // ===================== INIT =====================
