@@ -46,8 +46,10 @@ tr:hover td{background:#f8fafc}
 <div id="toast-container"></div>
 
 <script>
-// ===================== DATA STORE =====================
+// ===================== DATA STORE (Firebase + localStorage) =====================
 const DB_KEY = 'hs_prototype_db';
+const FIREBASE_URL = 'https://hs-prototype-8698f-default-rtdb.asia-southeast1.firebasedatabase.app';
+let syncing = false;
 
 function getDB() {
   const raw = localStorage.getItem(DB_KEY);
@@ -57,6 +59,51 @@ function getDB() {
 
 function saveDB(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
+  pushToFirebase(db);
+}
+
+async function pushToFirebase(db) {
+  try {
+    const toSave = {...db};
+    delete toSave.session; // session is local only
+    await fetch(FIREBASE_URL + '/data.json', {method:'PUT', body:JSON.stringify(toSave), headers:{'Content-Type':'application/json'}});
+  } catch(e) { console.log('Firebase push failed:', e); }
+}
+
+async function pullFromFirebase() {
+  if (syncing) return;
+  syncing = true;
+  try {
+    const res = await fetch(FIREBASE_URL + '/data.json');
+    const data = await res.json();
+    if (data && data.users) {
+      const local = getDB();
+      data.session = local.session; // keep local session
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+    }
+  } catch(e) { console.log('Firebase pull failed, using local:', e); }
+  syncing = false;
+}
+
+async function initDB() {
+  // Check if Firebase has data
+  try {
+    const res = await fetch(FIREBASE_URL + '/data.json');
+    const data = await res.json();
+    if (data && data.users) {
+      // Firebase has data — use it
+      const local = getDB();
+      data.session = local.session || null;
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+    } else {
+      // Firebase empty — seed and push
+      const db = seedData();
+      await pushToFirebase(db);
+    }
+  } catch(e) {
+    // Offline — just use local
+    getDB();
+  }
 }
 
 function seedData() {
@@ -141,7 +188,8 @@ function getRoute() {
   return window.location.hash || '#/';
 }
 
-function router() {
+async function router() {
+  await pullFromFirebase();
   const hash = getRoute();
   const [path, ...params] = hash.replace('#/','').split('/');
   const session = getSession();
@@ -983,8 +1031,10 @@ function adminDismiss(incId) {
 }
 
 // ===================== INIT =====================
-getDB(); // ensure seed data
-router();
+(async () => {
+  await initDB();
+  router();
+})();
 </script>
 </body>
 </html>
