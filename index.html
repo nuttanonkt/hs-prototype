@@ -767,15 +767,57 @@ function pageSearch(prefillQuery) {
   const db = getDB();
   render(hotelLayout(`
     <h1 class="text-xl font-bold mb-6">ค้นหาผู้ก่อเหตุ</h1>
-    <div class="flex gap-3 mb-6">
-      <input class="input flex-1" id="search-input" placeholder="🔍  ค้นหาด้วยชื่อ, เลขบัตรประชาชน, เลขพาสปอร์ต..." autofocus value="${prefillQuery||''}">
+    <div class="flex gap-3 mb-6 relative">
+      <div class="flex-1 relative">
+        <input class="input" id="search-input" placeholder="🔍  ค้นหาด้วยชื่อ, เลขบัตรประชาชน, เลขพาสปอร์ต..." autofocus value="${prefillQuery||''}" autocomplete="off">
+        <div id="search-suggest" class="absolute left-0 right-0 top-full mt-1 bg-navy text-white rounded-lg shadow-xl z-50 hidden overflow-hidden"></div>
+      </div>
       <button onclick="doSearch()" class="btn btn-primary">ค้นหา</button>
     </div>
     <div id="search-results"></div>
   `,'search'));
-  document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+  const input = document.getElementById('search-input');
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){hideSuggest();doSearch();}
+    if(e.key==='Escape') hideSuggest();
+  });
+  input.addEventListener('input', showSuggest);
   if (prefillQuery) doSearch();
 }
+
+function showSuggest() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const box = document.getElementById('search-suggest');
+  if (!q || q.length < 2) { box.classList.add('hidden'); return; }
+  const db = getDB();
+  const matches = db.offenders.filter(o =>
+    o.name.toLowerCase().includes(q) || o.nameTh.includes(q) ||
+    o.idCard.replace(/-/g,'').includes(q.replace(/-/g,''))
+  ).slice(0, 6);
+  if (!matches.length) { box.classList.add('hidden'); return; }
+  box.innerHTML = matches.map(o =>
+    `<div class="px-4 py-2.5 hover:bg-white/10 cursor-pointer flex items-center justify-between" onclick="document.getElementById('search-input').value='${o.name.replace(/'/g,"\\'")}';hideSuggest();doSearch()">
+      <div><span class="font-medium">${highlight(o.name,q)}</span> <span class="text-gray-400 text-xs">(${o.nameTh})</span></div>
+      <span class="text-gray-400 text-xs">${o.idCard}</span>
+    </div>`
+  ).join('');
+  box.classList.remove('hidden');
+}
+
+function hideSuggest() {
+  document.getElementById('search-suggest')?.classList.add('hidden');
+}
+
+function highlight(text, q) {
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  return text.substring(0,idx) + '<span class="text-blue-400 font-bold">' + text.substring(idx, idx+q.length) + '</span>' + text.substring(idx+q.length);
+}
+
+// Close suggest when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#search-input') && !e.target.closest('#search-suggest')) hideSuggest();
+});
 
 function doSearch() {
   const q = document.getElementById('search-input').value.trim().toLowerCase();
