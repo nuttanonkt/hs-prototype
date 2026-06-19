@@ -727,7 +727,7 @@ function pageDashboard() {
   render(hotelLayout(`
     <h1 class="text-xl font-bold mb-6">แดชบอร์ด</h1>
     <div class="grid grid-cols-3 gap-4 mb-8">
-      <a href="#/search" class="stat-card"><div class="text-2xl font-bold text-navy">${db.offenders.length}</div><div class="text-sm text-gray-500 mt-1">บุคคลในระบบ</div></a>
+      <a onclick="document.getElementById('search-history-section')?.scrollIntoView({behavior:'smooth'})" class="stat-card cursor-pointer"><div class="text-2xl font-bold text-navy">${(db.searchHistory||[]).filter(h=>h.userId===s.userId).length}</div><div class="text-sm text-gray-500 mt-1">การค้นหาล่าสุด</div></a>
       <a href="#/my-incidents" class="stat-card"><div class="text-2xl font-bold text-navy">${myIncidents.length}</div><div class="text-sm text-gray-500 mt-1">เหตุการณ์ของฉัน</div></a>
       <a href="#/my-incidents" class="stat-card"><div class="text-2xl font-bold text-warning">${myIncidents.filter(i=>i.blacklistStatus==='reviewing').length}</div><div class="text-sm text-gray-500 mt-1">รอการตรวจสอบ</div></a>
     </div>
@@ -735,7 +735,7 @@ function pageDashboard() {
       <div class="card"><h3 class="font-semibold mb-3">🔍 ค้นหาผู้ก่อเหตุ</h3><p class="text-sm text-gray-500 mb-4">ตรวจสอบประวัติบุคคลจากฐานข้อมูลกลาง</p><a href="#/search" class="btn btn-primary text-sm !py-2">ค้นหาเลย</a></div>
       <div class="card"><h3 class="font-semibold mb-3">＋ รายงานเหตุการณ์</h3><p class="text-sm text-gray-500 mb-4">แจ้งเหตุการณ์ใหม่พร้อมรายละเอียดและหลักฐาน</p><a href="#/create-incident" class="btn btn-primary text-sm !py-2">รายงานเหตุการณ์</a></div>
     </div>
-    <div class="card mt-6">
+    <div class="card mt-6" id="search-history-section">
       <h3 class="font-semibold mb-4">🔍 ประวัติการค้นหาล่าสุด</h3>
       ${(()=>{
         const history = (db.searchHistory||[]).filter(h=>h.userId===s.userId).slice(0,10);
