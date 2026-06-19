@@ -406,7 +406,7 @@ function hotelLayout(content, activePage='') {
     </aside>
     <div class="flex-1 flex flex-col">
       <header class="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-6">
-        <div></div>
+        <button onclick="history.back()" class="text-gray-400 hover:text-primary cursor-pointer flex items-center gap-1 text-sm"><span class="text-lg">←</span> ย้อนกลับ</button>
         <div class="flex items-center gap-4">
           <span class="text-sm text-gray-600">${getCurrentUser()?.name||''}</span>
           <button onclick="logout()" class="text-sm text-gray-500 hover:text-red-500 cursor-pointer">ออกจากระบบ</button>
@@ -437,7 +437,7 @@ function adminLayout(content, activePage='') {
     </aside>
     <div class="flex-1 flex flex-col">
       <header class="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-6">
-        <div></div>
+        <button onclick="history.back()" class="text-gray-400 hover:text-primary cursor-pointer flex items-center gap-1 text-sm"><span class="text-lg">←</span> ย้อนกลับ</button>
         <div class="flex items-center gap-4">
           <span class="badge bg-gray-100 text-gray-700 text-xs">ผู้ดูแลระบบ</span>
           <button onclick="logout()" class="text-sm text-gray-500 hover:text-red-500 cursor-pointer">ออกจากระบบ</button>
