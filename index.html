@@ -97,12 +97,20 @@ function mergeArrays(fbArr, localArr) {
   return [...map.values()];
 }
 
+function mergeSearchHistory(fbHist, localHist) {
+  const map = new Map();
+  for (const h of (fbHist||[])) { if(h?.odId) map.set(h.odId+'_'+h.userId, h); }
+  for (const h of (localHist||[])) { if(h?.odId) map.set(h.odId+'_'+h.userId, h); } // local wins
+  return [...map.values()].sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,30);
+}
+
 function mergeDB(fbData, localData) {
   return {
     users: mergeArrays(fbData.users, localData.users),
     hotels: mergeArrays(fbData.hotels, localData.hotels),
     offenders: mergeArrays(fbData.offenders, localData.offenders),
     incidents: mergeArrays(fbData.incidents, localData.incidents),
+    searchHistory: mergeSearchHistory(fbData.searchHistory, localData.searchHistory),
     pendingHotels: fbData.pendingHotels || localData.pendingHotels || [],
     session: localData.session,
   };
