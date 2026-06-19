@@ -738,18 +738,16 @@ function pageDashboard() {
     <div class="card mt-6" id="search-history-section">
       <h3 class="font-semibold mb-4">🔍 ประวัติการค้นหาล่าสุด</h3>
       ${(()=>{
-        const history = (db.searchHistory||[]).filter(h=>h.userId===s.userId).slice(0,10);
+        const history = (db.searchHistory||[]).filter(h=>h.userId===s.userId && h.odId).slice(0,10);
         if (!history.length) return '<div class="text-center py-8 text-gray-400">ยังไม่มีประวัติการค้นหา<br><a href="#/search" class="text-primary text-sm mt-2 inline-block">ค้นหาผู้ก่อเหตุ →</a></div>';
-        return `<table><thead><tr><th>คำค้นหา</th><th>ผลลัพธ์</th><th>วันที่/เวลา</th><th></th></tr></thead><tbody>
-        ${history.map(h=>{
-          const matchedNames = (h.resultIds||[]).map(id=>db.offenders.find(o=>o.id===id)?.name).filter(Boolean).join(', ');
-          return `<tr>
-            <td><span class="font-medium">"${h.query}"</span></td>
-            <td>${h.resultCount>0?'<span class="text-green-600">'+h.resultCount+' รายการ</span>':'<span class="text-gray-400">ไม่พบ</span>'}</td>
+        return `<table><thead><tr><th>ชื่อ</th><th>เลขบัตรประชาชน</th><th>วันที่ดู</th><th>สถานะ</th><th></th></tr></thead><tbody>
+        ${history.map(h=>`<tr>
+            <td><div class="flex items-center gap-2"><span class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</span><div><span class="font-medium">${h.odName}</span> <span class="text-gray-400 text-xs">(${h.odNameTh||''})</span></div></div></td>
+            <td class="text-gray-600">${h.odIdCard||'-'}</td>
             <td class="whitespace-nowrap text-gray-500">${h.date} ${h.time}</td>
-            <td><a href="#/search/${encodeURIComponent(h.query)}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td>
-          </tr>`;
-        }).join('')}
+            <td>${h.blacklisted?'<span class="badge badge-blacklisted">บัญชีดำ</span>':'<span class="text-gray-400 text-xs">ปกติ</span>'}</td>
+            <td><a href="#/offender/${h.odId}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td>
+          </tr>`).join('')}
         </tbody></table>`;
       })()}
     </div>
@@ -781,22 +779,7 @@ function doSearch() {
       o.idCard.replace(/-/g,'').includes(q.replace(/-/g,'')) ||
       o.passport.toLowerCase().includes(q)
     );
-    // Save search history
-    const s = getSession();
-    if (s) {
-      if (!db.searchHistory) db.searchHistory = [];
-      db.searchHistory.unshift({
-        query: q,
-        resultCount: results.length,
-        resultIds: results.slice(0,5).map(o=>o.id),
-        userId: s.userId,
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toTimeString().substring(0,5)
-      });
-      // Keep last 20
-      db.searchHistory = db.searchHistory.slice(0, 20);
-      saveDB(db);
-    }
+    // search history is now recorded when clicking "ดูรายละเอียด" in pageOffenderDetail
   }
   const container = document.getElementById('search-results');
   if (!results.length) {
@@ -826,6 +809,25 @@ function pageOffenderDetail(offId) {
   const o = db.offenders.find(x=>x.id===offId);
   if (!o) { navigate('#/search'); return; }
   const incidents = db.incidents.filter(i=>i.offenderId===offId);
+  // Record view history
+  const s = getSession();
+  if (s) {
+    if (!db.searchHistory) db.searchHistory = [];
+    // Remove duplicate if already viewed this person
+    db.searchHistory = db.searchHistory.filter(h => !(h.odId === offId && h.userId === s.userId));
+    db.searchHistory.unshift({
+      odId: offId,
+      odName: o.name,
+      odNameTh: o.nameTh,
+      odIdCard: o.idCard,
+      userId: s.userId,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().substring(0,5),
+      blacklisted: incidents.some(i=>i.blacklistStatus==='blacklisted')
+    });
+    db.searchHistory = db.searchHistory.slice(0, 30);
+    saveDB(db);
+  }
   render(hotelLayout(`
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-4"><a href="#/search" class="hover:text-primary">ค้นหาผู้ก่อเหตุ</a> / ${o.name}</div>
     <div class="grid grid-cols-3 gap-6">
