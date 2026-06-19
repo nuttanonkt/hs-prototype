@@ -736,14 +736,22 @@ function pageDashboard() {
       <div class="card"><h3 class="font-semibold mb-3">＋ รายงานเหตุการณ์</h3><p class="text-sm text-gray-500 mb-4">แจ้งเหตุการณ์ใหม่พร้อมรายละเอียดและหลักฐาน</p><a href="#/create-incident" class="btn btn-primary text-sm !py-2">รายงานเหตุการณ์</a></div>
     </div>
     <div class="card mt-6">
-      <h3 class="font-semibold mb-4">เหตุการณ์ล่าสุดในระบบ</h3>
-      <table><thead><tr><th>ผู้ก่อเหตุ</th><th>ประเภท</th><th>โรงแรม</th><th>วันที่</th><th>สถานะ</th><th></th></tr></thead><tbody>
-      ${recentIncidents.map(inc=>{
-        const off = db.offenders.find(o=>o.id===inc.offenderId);
-        const hotel = db.hotels.find(h=>h.id===inc.hotelId);
-        return `<tr><td>${off?.name||'-'}</td><td>${inc.type}</td><td>${hotel?.name||'-'}</td><td>${inc.date}</td><td>${badgeStatus(inc.blacklistStatus)}</td><td><a href="#/incident/${inc.id}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td></tr>`;
-      }).join('')}
-      </tbody></table>
+      <h3 class="font-semibold mb-4">🔍 ประวัติการค้นหาล่าสุด</h3>
+      ${(()=>{
+        const history = (db.searchHistory||[]).filter(h=>h.userId===s.userId).slice(0,10);
+        if (!history.length) return '<div class="text-center py-8 text-gray-400">ยังไม่มีประวัติการค้นหา<br><a href="#/search" class="text-primary text-sm mt-2 inline-block">ค้นหาผู้ก่อเหตุ →</a></div>';
+        return `<table><thead><tr><th>คำค้นหา</th><th>ผลลัพธ์</th><th>วันที่/เวลา</th><th></th></tr></thead><tbody>
+        ${history.map(h=>{
+          const matchedNames = (h.resultIds||[]).map(id=>db.offenders.find(o=>o.id===id)?.name).filter(Boolean).join(', ');
+          return `<tr>
+            <td><span class="font-medium">"${h.query}"</span></td>
+            <td>${h.resultCount>0?'<span class="text-green-600">'+h.resultCount+' รายการ</span>':'<span class="text-gray-400">ไม่พบ</span>'}</td>
+            <td class="whitespace-nowrap text-gray-500">${h.date} ${h.time}</td>
+            <td><a href="#/search" onclick="setTimeout(()=>{const el=document.getElementById('search-input');if(el){el.value='${h.query}';doSearch()}},100)" class="text-primary text-sm hover:underline">ค้นหาอีกครั้ง</a></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>`;
+      })()}
     </div>
   `,'dashboard'));
 }
@@ -772,6 +780,22 @@ function doSearch() {
       o.idCard.replace(/-/g,'').includes(q.replace(/-/g,'')) ||
       o.passport.toLowerCase().includes(q)
     );
+    // Save search history
+    const s = getSession();
+    if (s) {
+      if (!db.searchHistory) db.searchHistory = [];
+      db.searchHistory.unshift({
+        query: q,
+        resultCount: results.length,
+        resultIds: results.slice(0,5).map(o=>o.id),
+        userId: s.userId,
+        date: new Date().toISOString().split('T')[0],
+        time: new Date().toTimeString().substring(0,5)
+      });
+      // Keep last 20
+      db.searchHistory = db.searchHistory.slice(0, 20);
+      saveDB(db);
+    }
   }
   const container = document.getElementById('search-results');
   if (!results.length) {
