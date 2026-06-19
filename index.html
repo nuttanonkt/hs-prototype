@@ -248,7 +248,7 @@ async function router() {
     'reset-email': pageResetEmail,
     'set-password': pageSetPassword,
     'dashboard': ()=> session?.role==='hotel' ? pageDashboard() : navigate('#/login'),
-    'search': ()=> session?.role==='hotel' ? pageSearch() : navigate('#/login'),
+    'search': ()=> session?.role==='hotel' ? pageSearch(params[0] ? decodeURIComponent(params[0]) : '') : navigate('#/login'),
     'offender': ()=> session ? pageOffenderDetail(params[0]) : navigate('#/login'),
     'create-incident': ()=> session?.role==='hotel' ? pageCreateIncident(params[0]) : navigate('#/login'),
     'my-incidents': ()=> session?.role==='hotel' ? pageMyIncidents() : navigate('#/login'),
@@ -747,7 +747,7 @@ function pageDashboard() {
             <td><span class="font-medium">"${h.query}"</span></td>
             <td>${h.resultCount>0?'<span class="text-green-600">'+h.resultCount+' รายการ</span>':'<span class="text-gray-400">ไม่พบ</span>'}</td>
             <td class="whitespace-nowrap text-gray-500">${h.date} ${h.time}</td>
-            <td><a href="#/search" onclick="setTimeout(()=>{const el=document.getElementById('search-input');if(el){el.value='${h.query}';doSearch()}},100)" class="text-primary text-sm hover:underline">ค้นหาอีกครั้ง</a></td>
+            <td><a href="#/search/${encodeURIComponent(h.query)}" class="text-primary text-sm hover:underline">ดูรายละเอียด</a></td>
           </tr>`;
         }).join('')}
         </tbody></table>`;
@@ -757,17 +757,18 @@ function pageDashboard() {
 }
 
 // --- Search ---
-function pageSearch() {
+function pageSearch(prefillQuery) {
   const db = getDB();
   render(hotelLayout(`
     <h1 class="text-xl font-bold mb-6">ค้นหาผู้ก่อเหตุ</h1>
     <div class="flex gap-3 mb-6">
-      <input class="input flex-1" id="search-input" placeholder="🔍  ค้นหาด้วยชื่อ, เลขบัตรประชาชน, เลขพาสปอร์ต..." autofocus>
+      <input class="input flex-1" id="search-input" placeholder="🔍  ค้นหาด้วยชื่อ, เลขบัตรประชาชน, เลขพาสปอร์ต..." autofocus value="${prefillQuery||''}">
       <button onclick="doSearch()" class="btn btn-primary">ค้นหา</button>
     </div>
     <div id="search-results"></div>
   `,'search'));
   document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+  if (prefillQuery) doSearch();
 }
 
 function doSearch() {
