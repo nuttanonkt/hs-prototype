@@ -821,6 +821,7 @@ document.addEventListener('click', e => {
 
 function doSearch() {
   const q = document.getElementById('search-input').value.trim().toLowerCase();
+  if (!q) { document.getElementById('search-results').innerHTML = ''; return; }
   const db = getDB();
   let results = db.offenders;
   if (q) {
